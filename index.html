@@ -1,0 +1,2021 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VR Кафе: Бекон и Зелья — Quest 2/3 & ПК</title>
+  <!-- A-Frame 1.6.0 for Meta Quest 2 / Quest 3 WebXR + Desktop fallback -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #87ceeb;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* Minimalist helper banner shown ONLY on desktop outside VR session */
+    #desktop-guide {
+      position: fixed;
+      bottom: 14px;
+      left: 14px;
+      background: rgba(54, 38, 24, 0.90);
+      color: #fff8eb;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 2px solid #e67e22;
+      font-size: 13px;
+      line-height: 1.45;
+      pointer-events: none;
+      z-index: 20;
+      max-width: 380px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+    }
+    .a-enter-vr-button {
+      background-color: #e67e22 !important;
+      border-radius: 12px !important;
+      border: 2px solid #fff8eb !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Desktop control hint (automatically hidden when entering VR on Quest 2/3) -->
+  <div id="desktop-guide">
+    <b>Управление (ПК + Meta Quest 2/3):</b><br/>
+    • <b>Ходьба:</b> WASD / Стрелки (в VR: Левый стик — ходьба, Правый — поворот).<br/>
+    • <b>Взять / Положить / Бросить:</b> ЛКМ или <b>E</b> по ящику, предмету, плите, блендеру или гостю; <b>Q</b> / ПКМ — бросить (в VR: Grip или Trigger на любом контроллере).<br/>
+    • <b>Нарезать:</b> Возьмите Нож и кликните по овощу/сосиске (или коснитесь ножом в VR).
+  </div>
+
+  <!-- Main WebXR Scene -->
+  <a-scene
+    id="scene"
+    renderer="antialias: true; colorManagement: true;"
+    webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking;"
+    background="color: #87ceeb"
+    fog="type: linear; color: #bfe6ff; near: 20; far: 55"
+    cafe-game-loop
+  >
+    <!-- Procedural Canvas Textures -->
+    <a-assets>
+      <canvas id="tex-floor" width="512" height="512"></canvas>
+      <canvas id="tex-wall-tile" width="512" height="512"></canvas>
+      <canvas id="tex-oak" width="512" height="512"></canvas>
+      <canvas id="tex-poster" width="1024" height="768"></canvas>
+      <canvas id="tex-sign-banner" width="1024" height="256"></canvas>
+      <canvas id="tex-register" width="512" height="256"></canvas>
+      <canvas id="tex-order-bubble" width="768" height="384"></canvas>
+    </a-assets>
+
+    <!-- Warm Sunny Daylight & Cozy Kitchen Lighting (No Neon, No Dark Void) -->
+    <a-light type="hemisphere" color="#fffdf5" groundColor="#8d6e53" intensity="1.05"></a-light>
+    <a-light type="directional" color="#fff3d1" intensity="0.90" position="5 9 6"></a-light>
+    <a-light type="point" color="#ffd89b" intensity="0.50" distance="9" position="0 2.65 0.1"></a-light>
+
+    <!-- ===================================================================== -->
+    <!-- PLAYER RIG (#rig) — Positioned right in front of prep counters        -->
+    <!-- ===================================================================== -->
+    <a-entity id="rig" position="0 0 0.85" wasd-controls="acceleration: 22">
+      <a-camera id="camera" position="0 1.55 0" look-controls="pointerLockEnabled: false">
+        <!-- Desktop crosshair reticle -->
+        <a-ring id="desktop-reticle" position="0 0 -0.75" radius-inner="0.007" radius-outer="0.013"
+                material="color: #e67e22; shader: flat; opacity: 0.9"></a-ring>
+        <!-- Anchor for item held in Desktop mode -->
+        <a-entity id="desktop-hold-anchor" position="0.24 -0.18 -0.52"></a-entity>
+      </a-camera>
+
+      <!-- Left Meta Quest Touch Controller -->
+      <a-entity id="leftHand"
+                oculus-touch-controls="hand: left; model: true"
+                vr-locomotion="hand: left"
+                vr-grabber="hand: left">
+        <!-- Visual grab proximity indicator ring + forward reach laser -->
+        <a-ring class="grab-halo" radius-inner="0.032" radius-outer="0.046" rotation="-90 0 0"
+                material="color: #ff9800; shader: flat; opacity: 0.85"></a-ring>
+        <a-cylinder class="grab-ray" radius="0.003" height="1.2" position="0 -0.25 -0.55" rotation="70 0 0"
+                    material="color: #ff9800; shader: flat; opacity: 0.35"></a-cylinder>
+      </a-entity>
+
+      <!-- Right Meta Quest Touch Controller -->
+      <a-entity id="rightHand"
+                oculus-touch-controls="hand: right; model: true"
+                vr-locomotion="hand: right"
+                vr-grabber="hand: right">
+        <!-- Visual grab proximity indicator ring + forward reach laser -->
+        <a-ring class="grab-halo" radius-inner="0.032" radius-outer="0.046" rotation="-90 0 0"
+                material="color: #ff9800; shader: flat; opacity: 0.85"></a-ring>
+        <a-cylinder class="grab-ray" radius="0.003" height="1.2" position="0 -0.25 -0.55" rotation="70 0 0"
+                    material="color: #ff9800; shader: flat; opacity: 0.35"></a-cylinder>
+      </a-entity>
+    </a-entity>
+
+    <!-- ===================================================================== -->
+    <!-- OUTDOOR SUNNY STREET VIEW (Seen through the service window)           -->
+    <!-- ===================================================================== -->
+    <a-entity id="street-exterior">
+      <!-- Grass, Sidewalk & Asphalt Road -->
+      <a-plane rotation="-90 0 0" width="90" height="90" position="0 -0.05 -15" color="#7ec850"></a-plane>
+      <a-box position="0 -0.02 -3.2" width="40" height="0.06" depth="3.8" color="#e5dec9"></a-box>
+      <a-box position="0 -0.03 -7.5" width="70" height="0.05" depth="4.6" color="#525866"></a-box>
+      <!-- Road Stripes -->
+      <a-box position="-9 0.00 -7.5" width="2.4" height="0.02" depth="0.22" color="#fff6cc"></a-box>
+      <a-box position="-3 0.00 -7.5" width="2.4" height="0.02" depth="0.22" color="#fff6cc"></a-box>
+      <a-box position="3 0.00 -7.5" width="2.4" height="0.02" depth="0.22" color="#fff6cc"></a-box>
+      <a-box position="9 0.00 -7.5" width="2.4" height="0.02" depth="0.22" color="#fff6cc"></a-box>
+
+      <!-- Cartoon Sun & Fluffy Clouds -->
+      <a-sphere position="-8 11 -24" radius="2.3" color="#ffd54f" material="shader: flat"></a-sphere>
+      <a-entity position="-6 6.5 -17" street-mover="speed: 0.35; range: 18">
+        <a-sphere position="0 0 0" radius="1.15" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="0.95 0.15 0" radius="0.9" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="-0.9 -0.05 0" radius="0.85" color="#ffffff" material="shader: flat"></a-sphere>
+      </a-entity>
+      <a-entity position="6 7.5 -19" street-mover="speed: 0.25; range: 18">
+        <a-sphere position="0 0 0" radius="1.3" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="1.1 0.1 0" radius="0.95" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="-1.0 0.0 0" radius="0.85" color="#ffffff" material="shader: flat"></a-sphere>
+      </a-entity>
+
+      <!-- Low-Poly Trees & Houses Across the Street -->
+      <a-entity position="-4.8 0 -11.8">
+        <a-cylinder radius="0.28" height="1.9" position="0 0.95 0" color="#8d5524"></a-cylinder>
+        <a-dodecahedron radius="1.4" position="0 2.5 0" color="#52b748"></a-dodecahedron>
+        <a-dodecahedron radius="0.95" position="0.75 2.05 0.35" color="#68c95d"></a-dodecahedron>
+      </a-entity>
+      <a-entity position="4.9 0 -12.0">
+        <a-cylinder radius="0.3" height="2.0" position="0 1.0 0" color="#8d5524"></a-cylinder>
+        <a-dodecahedron radius="1.5" position="0 2.65 0" color="#48a83e"></a-dodecahedron>
+      </a-entity>
+      <a-entity position="0 0 -13.8">
+        <a-box position="0 1.5 0" width="4.4" height="3.0" depth="3.2" color="#ffe0a3"></a-box>
+        <a-cone position="0 3.7 0" radius-bottom="3.3" radius-top="0.1" height="1.6" rotation="0 45 0" color="#e05a47"></a-cone>
+        <a-box position="-1.0 1.6 1.62" width="0.85" height="0.85" depth="0.08" color="#b3e5fc"></a-box>
+        <a-box position="1.0 1.6 1.62" width="0.85" height="0.85" depth="0.08" color="#b3e5fc"></a-box>
+      </a-entity>
+
+      <!-- Driving Cartoon Cars -->
+      <a-entity position="-14 0.35 -6.8" street-mover="speed: 4.5; range: 18">
+        <a-box width="2.0" height="0.56" depth="0.96" color="#e74c3c"></a-box>
+        <a-box position="-0.1 0.46 0" width="1.1" height="0.46" depth="0.86" color="#ff7979"></a-box>
+        <a-cylinder position="-0.6 -0.22 0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.6 -0.22 0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="-0.6 -0.22 -0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.6 -0.22 -0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+      </a-entity>
+      <a-entity position="14 0.35 -8.3" street-mover="speed: -3.8; range: 18">
+        <a-box width="2.15" height="0.6" depth="1.0" color="#f39c12"></a-box>
+        <a-box position="0.15 0.48 0" width="1.15" height="0.48" depth="0.88" color="#ffeaa7"></a-box>
+        <a-cylinder position="-0.62 -0.24 0.5" rotation="90 0 0" radius="0.23" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.62 -0.24 0.5" rotation="90 0 0" radius="0.23" height="0.14" color="#2d3436"></a-cylinder>
+      </a-entity>
+    </a-entity>
+
+    <!-- ===================================================================== -->
+    <!-- COZY CARTOON DINER INTERIOR (Pastel Mint & Cream Tiles + Warm Oak)    -->
+    <!-- ===================================================================== -->
+    <a-entity id="diner-architecture">
+      <!-- Checkered Floor -->
+      <a-plane rotation="-90 0 0" width="5.8" height="5.4" position="0 0 0.2"
+               material="src: #tex-floor; repeat: 7 7; roughness: 0.75"></a-plane>
+
+      <!-- Ceiling & Warm Wooden Beams + Pendant Lamps -->
+      <a-plane rotation="90 0 0" width="5.8" height="5.4" position="0 3.15 0.2" color="#fff8eb"></a-plane>
+      <a-box position="0 3.06 -0.6" width="5.8" height="0.16" depth="0.22" color="#7c4d2b"></a-box>
+      <a-box position="0 3.06 1.2" width="5.8" height="0.16" depth="0.22" color="#7c4d2b"></a-box>
+
+      <!-- Pendant Lamp Left -->
+      <a-entity position="-0.9 2.6 -0.15">
+        <a-cylinder radius="0.015" height="0.9" position="0 0.45 0" color="#4a3525"></a-cylinder>
+        <a-cone radius-bottom="0.24" radius-top="0.06" height="0.18" color="#e05a47"></a-cone>
+        <a-sphere radius="0.07" position="0 -0.07 0" color="#fff5b8" material="shader: flat"></a-sphere>
+      </a-entity>
+      <!-- Pendant Lamp Right -->
+      <a-entity position="0.9 2.6 -0.15">
+        <a-cylinder radius="0.015" height="0.9" position="0 0.45 0" color="#4a3525"></a-cylinder>
+        <a-cone radius-bottom="0.24" radius-top="0.06" height="0.18" color="#f39c12"></a-cone>
+        <a-sphere radius="0.07" position="0 -0.07 0" color="#fff5b8" material="shader: flat"></a-sphere>
+      </a-entity>
+
+      <!-- Left, Right, and Back Walls (Pastel Mint & Cream Tiles) -->
+      <a-box position="-2.75 1.58 0.2" width="0.16" height="3.15" depth="5.4"
+             material="src: #tex-wall-tile; repeat: 9 5"></a-box>
+      <a-box position="2.75 1.58 0.2" width="0.16" height="3.15" depth="5.4"
+             material="src: #tex-wall-tile; repeat: 9 5"></a-box>
+      <a-box position="0 1.58 2.85" width="5.8" height="3.15" depth="0.16"
+             material="src: #tex-wall-tile; repeat: 9 5"></a-box>
+
+      <!-- Cartoon Retro Refrigerator on Back Wall -->
+      <a-entity position="1.75 1.05 2.42">
+        <a-box width="0.95" height="2.05" depth="0.72" color="#81ecec"></a-box>
+        <a-box position="0 0.35 0.37" width="0.88" height="1.15" depth="0.04" color="#a3f7f7"></a-box>
+        <a-box position="0 -0.62 0.37" width="0.88" height="0.68" depth="0.04" color="#a3f7f7"></a-box>
+        <a-box position="-0.34 0.35 0.42" width="0.04" height="0.35" depth="0.06" color="#ffffff"></a-box>
+        <a-box position="-0.34 -0.55 0.42" width="0.04" height="0.25" depth="0.06" color="#ffffff"></a-box>
+      </a-entity>
+
+      <!-- Potted Plant in Back Left Corner -->
+      <a-entity position="-2.15 0 2.35">
+        <a-cylinder radius-bottom="0.2" radius-top="0.26" height="0.42" position="0 0.21 0" color="#d35400"></a-cylinder>
+        <a-dodecahedron radius="0.34" position="0 0.60 0" color="#27ae60"></a-dodecahedron>
+        <a-dodecahedron radius="0.24" position="0.16 0.74 0.08" color="#2ecc71"></a-dodecahedron>
+      </a-entity>
+
+      <!-- Front Service Window Frame (at z = -0.75) -->
+      <a-box position="0 0.44 -0.75" width="5.6" height="0.88" depth="0.26" color="#d9822b"></a-box>
+      <a-box position="-2.25 1.98 -0.75" width="1.1" height="2.2" depth="0.26"
+             material="src: #tex-wall-tile; repeat: 2 4"></a-box>
+      <a-box position="2.25 1.98 -0.75" width="1.1" height="2.2" depth="0.26"
+             material="src: #tex-wall-tile; repeat: 2 4"></a-box>
+      <a-box position="0 2.80 -0.75" width="3.6" height="0.7" depth="0.28" color="#7c4d2b"></a-box>
+
+      <!-- Cafe Title Signboard above Window -->
+      <a-plane position="0 2.80 -0.59" width="3.1" height="0.54"
+               material="src: #tex-sign-banner; shader: flat"></a-plane>
+    </a-entity>
+
+    <!-- ===================================================================== -->
+    <!-- U-SHAPED WORK COUNTERS & TACTILE STATIONS (Right within arm's reach!) -->
+    <!-- ===================================================================== -->
+    <a-entity id="kitchen-stations">
+      <!-- 1. FRONT SERVICE COUNTER (z = -0.35, right in front of player at z = 0.85) -->
+      <a-box position="0 0.44 -0.35" width="3.8" height="0.88" depth="0.76"
+             material="src: #tex-oak; repeat: 3 1"></a-box>
+      <a-box position="0 0.90 -0.35" width="3.9" height="0.06" depth="0.82" color="#fff6e5"></a-box>
+
+      <!-- Serving Plate / Tray Zone (Center of Front Counter) -->
+      <a-entity id="serving-plate" position="0 0.94 -0.35">
+        <a-cylinder radius="0.34" height="0.03" color="#ffffff"></a-cylinder>
+        <a-ring rotation="-90 0 0" position="0 0.018 0" radius-inner="0.26" radius-outer="0.31" color="#e67e22"></a-ring>
+        <a-text value="ПОДАЧА ГОСТЮ" align="center" position="0 0.02 0.22" rotation="-90 0 0" width="1.35" color="#b3541e"></a-text>
+      </a-entity>
+
+      <!-- Diegetic 3D Cash Register (Right of Serving Plate) -->
+      <a-entity id="cash-register" position="0.88 0.93 -0.32" rotation="0 -18 0">
+        <a-box position="0 0.12 0" width="0.46" height="0.24" depth="0.42" color="#f1c40f"></a-box>
+        <a-box position="0 0.30 -0.05" width="0.42" height="0.22" depth="0.28" color="#d4ac0d"></a-box>
+        <a-plane id="register-screen" position="0 0.44 -0.02" width="0.38" height="0.18"
+                 material="src: #tex-register; shader: flat"></a-plane>
+      </a-entity>
+
+      <!-- Physical Counter Service Bell (Left of Serving Plate — summons/skips customer) -->
+      <a-entity id="service-bell" position="-0.78 0.94 -0.28" tactile-button="action: bell">
+        <a-cylinder radius="0.09" height="0.03" color="#5d4037"></a-cylinder>
+        <a-sphere position="0 0.035 0" radius="0.075" theta-length="90" color="#f1c40f"></a-sphere>
+        <a-cylinder position="0 0.08 0" radius="0.016" height="0.03" color="#e74c3c"></a-cylinder>
+        <a-text value="ЗВОНОК" align="center" position="0 0.15 0" width="1.3" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- 2. LEFT COUNTER: INGREDIENT CRATES & CHOPPING BOARD (x = -1.42) -->
+      <a-box position="-1.42 0.44 0.72" width="0.82" height="0.88" depth="2.1"
+             material="src: #tex-oak; repeat: 2 2"></a-box>
+      <a-box position="-1.42 0.90 0.72" width="0.88" height="0.06" depth="2.16" color="#fff6e5"></a-box>
+
+      <!-- Russian Wall Recipe & Mutation Chart -->
+      <a-entity position="-2.65 1.75 0.72" rotation="0 90 0">
+        <a-box width="2.2" height="1.5" depth="0.05" color="#6d4c41"></a-box>
+        <a-plane position="0 0 0.03" width="2.08" height="1.38"
+                 material="src: #tex-poster; shader: flat"></a-plane>
+      </a-entity>
+
+      <!-- Chopping Board & Grabbable Kitchen Knife -->
+      <a-entity id="chopping-board" position="-1.30 0.94 0.65">
+        <a-box width="0.46" height="0.03" depth="0.58" color="#deb887"></a-box>
+        <a-box position="0 0.018 0" width="0.40" height="0.005" depth="0.50" color="#f5deb3"></a-box>
+      </a-entity>
+
+      <a-entity id="kitchen-knife" position="-1.20 0.98 1.02" rotation="0 25 0"
+                grabbable="type: knife; name: Нож" knife-slicer>
+        <a-box position="0 0.02 0.08" width="0.032" height="0.032" depth="0.13" color="#5d4037"></a-box>
+        <a-box position="0 0.022 -0.07" width="0.01" height="0.045" depth="0.19" color="#cfd8dc"></a-box>
+      </a-entity>
+
+      <!-- Infinite Ingredient Crates along Left Counter -->
+      <!-- Crate 1: Raw Bacon -->
+      <a-entity position="-1.52 1.02 -0.05" ingredient-crate="itemType: bacon; label: БЕКОН">
+        <a-box width="0.34" height="0.16" depth="0.32" color="#a1662f"></a-box>
+        <a-box position="-0.04 0.08 0" width="0.08" height="0.02" depth="0.22" color="#e57373"></a-box>
+        <a-box position="0.05 0.09 0.02" rotation="0 15 0" width="0.08" height="0.02" depth="0.22" color="#ef9a9a"></a-box>
+        <a-text value="БЕКОН" align="center" position="0 0.18 0" rotation="0 90 0" width="1.35" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 2: Sausages -->
+      <a-entity position="-1.52 1.02 0.30" ingredient-crate="itemType: sausage; label: СОСИСКИ">
+        <a-box width="0.34" height="0.16" depth="0.32" color="#a1662f"></a-box>
+        <a-cylinder position="-0.05 0.08 0" rotation="90 10 0" radius="0.03" height="0.22" color="#d96b6b"></a-cylinder>
+        <a-cylinder position="0.05 0.08 -0.02" rotation="90 -15 0" radius="0.03" height="0.22" color="#e07a7a"></a-cylinder>
+        <a-text value="СОСИСКИ" align="center" position="0 0.18 0" rotation="0 90 0" width="1.35" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 3: Cucumbers -->
+      <a-entity position="-1.52 1.02 1.32" ingredient-crate="itemType: cucumber; label: ОГУРЦЫ">
+        <a-box width="0.34" height="0.16" depth="0.32" color="#a1662f"></a-box>
+        <a-cylinder position="0 0.09 0" rotation="90 25 0" radius="0.038" height="0.24" color="#2e7d32"></a-cylinder>
+        <a-text value="ОГУРЦЫ" align="center" position="0 0.18 0" rotation="0 90 0" width="1.35" color="#1b5e20"></a-text>
+      </a-entity>
+
+      <!-- Crate 4: Watermelons -->
+      <a-entity position="-1.52 1.02 1.66" ingredient-crate="itemType: watermelon; label: АРБУЗЫ">
+        <a-box width="0.34" height="0.16" depth="0.32" color="#a1662f"></a-box>
+        <a-sphere position="0 0.11 0" radius="0.105" color="#388e3c"></a-sphere>
+        <a-text value="АРБУЗЫ" align="center" position="0 0.24 0" rotation="0 90 0" width="1.35" color="#1b5e20"></a-text>
+      </a-entity>
+
+      <!-- Raised Shelf on Left Wall for Pumpkins, Old Boot & Rubber Duck -->
+      <a-box position="-2.22 1.15 0.72" width="0.46" height="0.05" depth="2.0" color="#8d5524"></a-box>
+
+      <!-- Crate 5: Pumpkins -->
+      <a-entity position="-2.22 1.25 0.12" ingredient-crate="itemType: pumpkin; label: ТЫКВЫ">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#a1662f"></a-box>
+        <a-sphere position="0 0.11 0" radius="0.10" scale="1.15 0.9 1.15" color="#f57c00"></a-sphere>
+        <a-text value="ТЫКВЫ" align="center" position="0 0.24 0" rotation="0 90 0" width="1.35" color="#e65100"></a-text>
+      </a-entity>
+
+      <!-- Crate 6: Old Boots (For Fear Potion!) -->
+      <a-entity position="-2.22 1.25 0.72" ingredient-crate="itemType: boot; label: БОТИНОК">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#6d4c41"></a-box>
+        <a-box position="0 0.10 0.02" width="0.09" height="0.08" depth="0.18" color="#4e342e"></a-box>
+        <a-box position="0 0.15 -0.03" width="0.09" height="0.10" depth="0.09" color="#5d4037"></a-box>
+        <a-text value="БОТИНОК" align="center" position="0 0.24 0" rotation="0 90 0" width="1.35" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 7: Rubber Ducks -->
+      <a-entity position="-2.22 1.25 1.32" ingredient-crate="itemType: duck; label: УТОЧКА">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#a1662f"></a-box>
+        <a-sphere position="0 0.10 0" radius="0.07" color="#fdd835"></a-sphere>
+        <a-sphere position="0 0.16 0.04" radius="0.045" color="#fdd835"></a-sphere>
+        <a-cone position="0 0.16 0.09" rotation="90 0 0" radius-bottom="0.02" height="0.04" color="#fb8c00"></a-cone>
+        <a-text value="УТОЧКА" align="center" position="0 0.24 0" rotation="0 90 0" width="1.35" color="#f57f17"></a-text>
+      </a-entity>
+
+      <!-- 3. RIGHT COUNTER: SIZZLING STOVE & MUTATION BLENDER (x = 1.42) -->
+      <a-box position="1.42 0.44 0.72" width="0.82" height="0.88" depth="2.1"
+             material="src: #tex-oak; repeat: 2 2"></a-box>
+      <a-box position="1.42 0.90 0.72" width="0.88" height="0.06" depth="2.16" color="#fff6e5"></a-box>
+
+      <!-- Sizzling Stove & Two Frying Pans -->
+      <a-entity id="stove-station" position="1.40 0.94 0.25" stove-fryer>
+        <a-box width="0.68" height="0.10" depth="0.74" color="#eceff1"></a-box>
+        <a-cylinder position="0 0.055 -0.17" radius="0.14" height="0.015" color="#d84315"></a-cylinder>
+        <a-cylinder position="0 0.055 0.18" radius="0.14" height="0.015" color="#d84315"></a-cylinder>
+        <!-- Pan 1 -->
+        <a-cylinder position="0 0.08 -0.17" radius="0.19" height="0.035" color="#37474f"></a-cylinder>
+        <a-box position="-0.25 0.09 -0.17" width="0.22" height="0.025" depth="0.035" color="#263238"></a-box>
+        <!-- Pan 2 -->
+        <a-cylinder position="0 0.08 0.18" radius="0.19" height="0.035" color="#37474f"></a-cylinder>
+        <a-box position="-0.25 0.09 0.18" width="0.22" height="0.025" depth="0.035" color="#263238"></a-box>
+        <a-text value="ПЛИТА (ЖАРКА)" align="center" position="-0.32 0.18 0" rotation="0 -90 0" width="1.4" color="#bf360c"></a-text>
+      </a-entity>
+
+      <!-- Mutation Blender Station -->
+      <a-entity id="blender-station" position="1.40 0.94 1.15" potion-blender>
+        <a-cylinder radius="0.17" height="0.18" position="0 0.09 0" color="#e53935"></a-cylinder>
+        <a-cylinder id="blender-jar" radius="0.15" height="0.34" position="0 0.35 0"
+                    material="color: #e0f7fa; opacity: 0.45; transparent: true"></a-cylinder>
+        <a-cylinder id="blender-liquid" radius="0.135" height="0.02" position="0 0.21 0"
+                    color="#ff7043" visible="false"></a-cylinder>
+        <!-- Big Green 3D Blend Button (Works on touch OR trigger/click!) -->
+        <a-entity id="blend-btn" position="-0.20 0.13 0" tactile-button="action: blend">
+          <a-box width="0.10" height="0.10" depth="0.14" color="#2ecc71"></a-box>
+          <a-text value="СМЕШАТЬ!" align="center" position="-0.06 0.09 0" rotation="0 -90 0" width="1.3" color="#1b5e20"></a-text>
+        </a-entity>
+        <!-- Output Spot for Finished Potion/Smoothie Cup -->
+        <a-entity id="drink-output-spot" position="-0.24 0.02 0.34"></a-entity>
+      </a-entity>
+
+      <!-- Trash Bin -->
+      <a-entity id="trash-can" position="1.15 0 1.85" trash-bin>
+        <a-cylinder radius-bottom="0.18" radius-top="0.22" height="0.52" position="0 0.26 0" color="#607d8b"></a-cylinder>
+        <a-cylinder radius="0.19" height="0.02" position="0 0.51 0" color="#263238"></a-cylinder>
+        <a-text value="МУСОР" align="center" position="0 0.58 0" rotation="0 -90 0" width="1.3" color="#37474f"></a-text>
+      </a-entity>
+    </a-entity>
+
+    <!-- ===================================================================== -->
+    <!-- DYNAMIC ENTITIES (Spawned Food, Drinks, Cash & Customers at Window)   -->
+    <!-- ===================================================================== -->
+    <a-entity id="dynamic-items"></a-entity>
+    <!-- Customer stands right outside the service window at z = -1.15 -->
+    <a-entity id="customer-stage" position="0 0 -1.15"></a-entity>
+
+  </a-scene>
+
+  <script>
+    /**
+     * =========================================================================
+     * 1. PROCEDURAL WEB AUDIO ENGINE (Zero external audio files)
+     * =========================================================================
+     */
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+      }
+      unlock() {
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+      tone(freq, type = 'sine', dur = 0.14, vol = 0.18, endFreq = null) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, now + dur);
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + dur);
+      }
+      noise(dur = 0.15, vol = 0.14, bandFreq = 1400) {
+        if (!this.ctx) return;
+        const len = Math.floor(this.ctx.sampleRate * dur);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const flt = this.ctx.createBiquadFilter();
+        flt.type = 'bandpass';
+        flt.frequency.value = bandFreq;
+        const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        src.connect(flt);
+        flt.connect(gain);
+        gain.connect(this.ctx.destination);
+        src.start(now);
+      }
+      pop() { this.tone(340, 'sine', 0.09, 0.18, 680); }
+      chop() {
+        this.noise(0.08, 0.25, 950);
+        this.tone(190, 'triangle', 0.07, 0.2, 75);
+      }
+      sizzle() { this.noise(0.24, 0.07, 3400); }
+      blend() {
+        this.tone(150, 'sawtooth', 0.7, 0.16, 440);
+        this.noise(0.7, 0.12, 1600);
+      }
+      cash() {
+        this.tone(987, 'sine', 0.12, 0.22);
+        setTimeout(() => this.tone(1318, 'sine', 0.26, 0.25), 90);
+      }
+      bell() { this.tone(1560, 'sine', 0.45, 0.22); }
+      mutate() {
+        this.tone(220, 'sawtooth', 0.45, 0.22, 820);
+        setTimeout(() => this.tone(620, 'square', 0.35, 0.16, 180), 170);
+      }
+      robberScream() {
+        this.tone(560, 'sawtooth', 0.65, 0.28, 1240);
+        setTimeout(() => this.tone(940, 'sawtooth', 0.55, 0.24, 320), 210);
+      }
+      mumble(pitch = 220) {
+        for (let i = 0; i < 3; i++) {
+          setTimeout(() => this.tone(pitch + Math.random() * 85, 'triangle', 0.09, 0.14), i * 95);
+        }
+      }
+    }
+    const SFX = new SoundEngine();
+
+    /**
+     * =========================================================================
+     * 2. PROCEDURAL CANVAS TEXTURES (Diegetic 3D Signs, Poster, Order Bubble)
+     * =========================================================================
+     */
+    function buildAllTextures() {
+      // Checkered Diner Floor
+      const fl = document.getElementById('tex-floor').getContext('2d');
+      fl.fillStyle = '#fff9ec';
+      fl.fillRect(0, 0, 512, 512);
+      fl.fillStyle = '#3b3029';
+      fl.fillRect(0, 0, 256, 256);
+      fl.fillRect(256, 256, 256, 256);
+
+      // Pastel Mint & Cream Kitchen Wall Tiles
+      const wt = document.getElementById('tex-wall-tile').getContext('2d');
+      wt.fillStyle = '#e8f6ef';
+      wt.fillRect(0, 0, 512, 512);
+      wt.fillStyle = '#fffdf7';
+      wt.fillRect(0, 0, 256, 256);
+      wt.fillRect(256, 256, 256, 256);
+      wt.strokeStyle = '#c4dfd1';
+      wt.lineWidth = 6;
+      for (let i = 0; i <= 512; i += 128) {
+        wt.beginPath(); wt.moveTo(i, 0); wt.lineTo(i, 512); wt.stroke();
+        wt.beginPath(); wt.moveTo(0, i); wt.lineTo(512, i); wt.stroke();
+      }
+
+      // Warm Oak Countertop
+      const ok = document.getElementById('tex-oak').getContext('2d');
+      ok.fillStyle = '#bd7838';
+      ok.fillRect(0, 0, 512, 512);
+      ok.fillStyle = '#9e5e24';
+      for (let y = 0; y < 512; y += 64) ok.fillRect(0, y, 512, 6);
+
+      // Top Cafe Banner Sign
+      const sb = document.getElementById('tex-sign-banner').getContext('2d');
+      sb.fillStyle = '#5c2c0c';
+      sb.fillRect(0, 0, 1024, 256);
+      sb.strokeStyle = '#f6ad55';
+      sb.lineWidth = 14;
+      sb.strokeRect(12, 12, 1000, 232);
+      sb.fillStyle = '#fff5d6';
+      sb.font = 'bold 72px sans-serif';
+      sb.textAlign = 'center';
+      sb.fillText('КАФЕ «БЕКОН И ЗЕЛЬЯ»', 512, 148);
+
+      // Wall Recipe & Mutation Poster in Russian
+      const ps = document.getElementById('tex-poster').getContext('2d');
+      ps.fillStyle = '#fffdf7';
+      ps.fillRect(0, 0, 1024, 768);
+      ps.strokeStyle = '#d97706';
+      ps.lineWidth = 16;
+      ps.strokeRect(16, 16, 992, 736);
+
+      ps.fillStyle = '#78350f';
+      ps.font = 'bold 46px sans-serif';
+      ps.textAlign = 'center';
+      ps.fillText('ШПАРГАЛКА ПОВАРА И АЛХИМИКА', 512, 80);
+
+      ps.textAlign = 'left';
+      ps.font = 'bold 34px sans-serif';
+      ps.fillStyle = '#b45309';
+      ps.fillText('1. ЖАРКА И НАРЕЗКА:', 52, 148);
+      ps.font = '28px sans-serif';
+      ps.fillStyle = '#292524';
+      ps.fillText('• Бекон и Сосиски жарь на ПЛИТЕ (справа) до румяности!', 60, 194);
+      ps.fillText('• Арбуз, Тыкву, Огурец и Сосиски режь НОЖОМ!', 60, 238);
+
+      ps.font = 'bold 34px sans-serif';
+      ps.fillStyle = '#b45309';
+      ps.fillText('2. БЛЕНДЕР МУТАЦИЙ (Брось 2+ продукта и жми СМЕШАТЬ):', 52, 310);
+      ps.font = '28px sans-serif';
+      ps.fillStyle = '#292524';
+      ps.fillText('• Бекон + Сосиска = Коктейль «Руки-Нитки как кости»', 60, 358);
+      ps.fillText('• Арбуз + Тыква = Зелье «Гигантская Тыквоголова»', 60, 403);
+      ps.fillText('• Огурец + Бекон = Зелье «Зелёный Карлик»', 60, 448);
+
+      ps.fillStyle = '#fee2e2';
+      ps.fillRect(48, 495, 928, 200);
+      ps.strokeStyle = '#dc2626';
+      ps.lineWidth = 6;
+      ps.strokeRect(48, 495, 928, 200);
+
+      ps.fillStyle = '#b91c1c';
+      ps.font = 'bold 36px sans-serif';
+      ps.fillText('3. ПРОТИВ ГРАБИТЕЛЯ — ЗЕЛЬЕ СТРАХА:', 72, 552);
+      ps.fillStyle = '#1f2937';
+      ps.font = 'bold 30px sans-serif';
+      ps.fillText('• Смешай в блендере: ТЫКВА + БОТИНОК (или УТОЧКА)', 72, 604);
+      ps.fillText('• КИНЬ фиолетовую бутылку в ГРАБИТЕЛЯ (+$50 награда)!', 72, 654);
+    }
+
+    function updateRegisterDisplay(cash, servedCount) {
+      const cvs = document.getElementById('tex-register');
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = '#064e3b';
+      ctx.fillRect(0, 0, 512, 256);
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(8, 8, 496, 240);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText(`ГОСТЕЙ: ${servedCount}`, 256, 65);
+
+      ctx.fillStyle = '#fde047';
+      ctx.font = 'bold 92px monospace';
+      ctx.fillText(`$${cash}`, 256, 188);
+
+      const scr = document.getElementById('register-screen');
+      if (scr && scr.getObject3D('mesh') && scr.getObject3D('mesh').material.map) {
+        scr.getObject3D('mesh').material.map.needsUpdate = true;
+      }
+    }
+
+    function updateCustomerOrderBubble(header, line1, line2, isDanger = false) {
+      const cvs = document.getElementById('tex-order-bubble');
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = isDanger ? '#7f1d1d' : '#fffdf7';
+      ctx.fillRect(0, 0, 768, 384);
+      ctx.strokeStyle = isDanger ? '#f87171' : '#e67e22';
+      ctx.lineWidth = 16;
+      ctx.strokeRect(12, 12, 744, 360);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isDanger ? '#fde047' : '#b45309';
+      ctx.font = 'bold 42px sans-serif';
+      ctx.fillText(header, 384, 78);
+
+      ctx.fillStyle = isDanger ? '#ffffff' : '#1f2937';
+      ctx.font = 'bold 38px sans-serif';
+      ctx.fillText(line1, 384, 182);
+
+      ctx.fillStyle = isDanger ? '#fecaca' : '#0369a1';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText(line2, 384, 282);
+
+      const bubblePlane = document.getElementById('active-order-bubble');
+      if (bubblePlane && bubblePlane.getObject3D('mesh') && bubblePlane.getObject3D('mesh').material.map) {
+        bubblePlane.getObject3D('mesh').material.map.needsUpdate = true;
+      }
+    }
+
+    /**
+     * =========================================================================
+     * 3. FOOD, SLICE & POTION FACTORY
+     * =========================================================================
+     */
+    const FOOD_PROPS = {
+      bacon: { name: 'Бекон', raw: '#e57373', cooked: '#8d3b24', burnt: '#261c1a', cookable: true },
+      sausage: { name: 'Сосиска', raw: '#e07a7a', cooked: '#9c3d22', burnt: '#211816', cookable: true },
+      sausage_slice: { name: 'Ломтик сосиски', raw: '#e07a7a', cooked: '#9c3d22', burnt: '#211816', cookable: true },
+      cucumber: { name: 'Огурец', raw: '#2e7d32', cooked: '#556b2f', burnt: '#1f2418', cookable: true },
+      cucumber_slice: { name: 'Долька огурца', raw: '#81c784', cooked: '#689f38', burnt: '#263218', cookable: true },
+      watermelon: { name: 'Арбуз', raw: '#388e3c', cooked: '#4e5d30', burnt: '#1b1f16', cookable: false },
+      watermelon_slice: { name: 'Долька арбуза', raw: '#ef5350', cooked: '#ad3a38', burnt: '#291717', cookable: false },
+      pumpkin: { name: 'Тыква', raw: '#f57c00', cooked: '#bf5b04', burnt: '#2b1b0e', cookable: false },
+      pumpkin_slice: { name: 'Кусок тыквы', raw: '#fb8c00', cooked: '#c66900', burnt: '#2e1d0d', cookable: false },
+      boot: { name: 'Старый ботинок', raw: '#4e342e', cooked: '#3e2723', burnt: '#1c1210', cookable: true },
+      duck: { name: 'Уточка', raw: '#fdd835', cooked: '#f9a825', burnt: '#33290a', cookable: true }
+    };
+
+    function spawnFoodEntity(type, pos, cookState = 'raw') {
+      const container = document.getElementById('dynamic-items');
+      const el = document.createElement('a-entity');
+      const info = FOOD_PROPS[type] || FOOD_PROPS.bacon;
+
+      el.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      el.setAttribute('grabbable', `type: ${type}; name: ${info.name}`);
+      el.dataset.itemType = type;
+      el.dataset.cookState = cookState;
+      el.dataset.cookTime = cookState === 'cooked' ? '5.0' : '0';
+
+      const color = cookState === 'cooked' ? info.cooked : (cookState === 'burnt' ? info.burnt : info.raw);
+
+      if (type === 'bacon') {
+        const b = document.createElement('a-box');
+        b.setAttribute('width', '0.075'); b.setAttribute('height', '0.015'); b.setAttribute('depth', '0.22');
+        b.setAttribute('color', color); b.classList.add('food-mesh');
+        const fat = document.createElement('a-box');
+        fat.setAttribute('width', '0.022'); fat.setAttribute('height', '0.017'); fat.setAttribute('depth', '0.21');
+        fat.setAttribute('color', '#ffcdd2');
+        el.appendChild(b); el.appendChild(fat);
+      } else if (type === 'sausage') {
+        const c = document.createElement('a-cylinder');
+        c.setAttribute('radius', '0.03'); c.setAttribute('height', '0.21'); c.setAttribute('rotation', '90 0 0');
+        c.setAttribute('color', color); c.classList.add('food-mesh');
+        el.appendChild(c);
+      } else if (type === 'sausage_slice') {
+        const d = document.createElement('a-cylinder');
+        d.setAttribute('radius', '0.034'); d.setAttribute('height', '0.025');
+        d.setAttribute('color', color); d.classList.add('food-mesh');
+        el.appendChild(d);
+      } else if (type === 'cucumber') {
+        const c = document.createElement('a-cylinder');
+        c.setAttribute('radius', '0.035'); c.setAttribute('height', '0.22'); c.setAttribute('rotation', '90 0 0');
+        c.setAttribute('color', color); c.classList.add('food-mesh');
+        el.appendChild(c);
+      } else if (type === 'cucumber_slice') {
+        const d = document.createElement('a-cylinder');
+        d.setAttribute('radius', '0.04'); d.setAttribute('height', '0.022');
+        d.setAttribute('color', color); d.classList.add('food-mesh');
+        el.appendChild(d);
+      } else if (type === 'watermelon') {
+        const s = document.createElement('a-sphere');
+        s.setAttribute('radius', '0.11'); s.setAttribute('color', color); s.classList.add('food-mesh');
+        el.appendChild(s);
+      } else if (type === 'watermelon_slice') {
+        const w = document.createElement('a-cone');
+        w.setAttribute('radius-bottom', '0.095'); w.setAttribute('radius-top', '0.01');
+        w.setAttribute('height', '0.11'); w.setAttribute('scale', '1 1 0.35');
+        w.setAttribute('color', color); w.classList.add('food-mesh');
+        el.appendChild(w);
+      } else if (type === 'pumpkin') {
+        const s = document.createElement('a-sphere');
+        s.setAttribute('radius', '0.10'); s.setAttribute('scale', '1.15 0.9 1.15');
+        s.setAttribute('color', color); s.classList.add('food-mesh');
+        const st = document.createElement('a-cylinder');
+        st.setAttribute('radius', '0.018'); st.setAttribute('height', '0.04'); st.setAttribute('position', '0 0.09 0');
+        st.setAttribute('color', '#33691e');
+        el.appendChild(s); el.appendChild(st);
+      } else if (type === 'pumpkin_slice') {
+        const ch = document.createElement('a-box');
+        ch.setAttribute('width', '0.085'); ch.setAttribute('height', '0.055'); ch.setAttribute('depth', '0.095');
+        ch.setAttribute('color', color); ch.classList.add('food-mesh');
+        el.appendChild(ch);
+      } else if (type === 'boot') {
+        const sole = document.createElement('a-box');
+        sole.setAttribute('width', '0.095'); sole.setAttribute('height', '0.08'); sole.setAttribute('depth', '0.18');
+        sole.setAttribute('color', color); sole.classList.add('food-mesh');
+        const top = document.createElement('a-box');
+        top.setAttribute('width', '0.095'); top.setAttribute('height', '0.10'); top.setAttribute('depth', '0.09');
+        top.setAttribute('position', '0 0.06 -0.04'); top.setAttribute('color', '#5d4037');
+        el.appendChild(sole); el.appendChild(top);
+      } else if (type === 'duck') {
+        const body = document.createElement('a-sphere');
+        body.setAttribute('radius', '0.068'); body.setAttribute('color', color); body.classList.add('food-mesh');
+        const head = document.createElement('a-sphere');
+        head.setAttribute('radius', '0.044'); head.setAttribute('position', '0 0.06 0.035'); head.setAttribute('color', color);
+        const beak = document.createElement('a-cone');
+        beak.setAttribute('radius-bottom', '0.018'); beak.setAttribute('height', '0.035');
+        beak.setAttribute('rotation', '90 0 0'); beak.setAttribute('position', '0 0.06 0.08'); beak.setAttribute('color', '#ff6f00');
+        el.appendChild(body); el.appendChild(head); el.appendChild(beak);
+      }
+
+      container.appendChild(el);
+      return el;
+    }
+
+    function spawnPotionCup(profile, pos) {
+      const container = document.getElementById('dynamic-items');
+      const el = document.createElement('a-entity');
+      el.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      el.setAttribute('grabbable', `type: drink; name: ${profile.label}`);
+      el.dataset.itemType = 'drink';
+      el.dataset.potionEffect = profile.effect;
+
+      const bottle = document.createElement('a-cylinder');
+      bottle.setAttribute('radius', '0.058'); bottle.setAttribute('height', '0.16'); bottle.setAttribute('position', '0 0.08 0');
+      bottle.setAttribute('color', profile.color);
+
+      const neck = document.createElement('a-cylinder');
+      neck.setAttribute('radius', '0.026'); neck.setAttribute('height', '0.05'); neck.setAttribute('position', '0 0.18 0');
+      neck.setAttribute('color', '#eceff1');
+
+      const cork = document.createElement('a-cylinder');
+      cork.setAttribute('radius', '0.022'); cork.setAttribute('height', '0.025'); cork.setAttribute('position', '0 0.21 0');
+      cork.setAttribute('color', '#8d6e63');
+
+      const tag = document.createElement('a-text');
+      tag.setAttribute('value', profile.tag);
+      tag.setAttribute('align', 'center');
+      tag.setAttribute('position', '0 0.27 0');
+      tag.setAttribute('width', '1.3');
+      tag.setAttribute('color', '#1f2937');
+
+      el.appendChild(bottle); el.appendChild(neck); el.appendChild(cork); el.appendChild(tag);
+      container.appendChild(el);
+      return el;
+    }
+
+    function spawnSteamBurst(pos, color = '#ffffff', count = 1) {
+      const container = document.getElementById('dynamic-items');
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('a-sphere');
+        p.setAttribute('position', `${pos.x + (Math.random()-0.5)*0.1} ${pos.y + 0.04} ${pos.z + (Math.random()-0.5)*0.1}`);
+        p.setAttribute('radius', '0.032');
+        p.setAttribute('color', color);
+        p.setAttribute('material', 'opacity: 0.75; transparent: true');
+        container.appendChild(p);
+
+        let age = 0;
+        const t = setInterval(() => {
+          age += 0.05;
+          if (!p.parentNode || age > 0.65) {
+            clearInterval(t);
+            if (p.parentNode) p.parentNode.removeChild(p);
+            return;
+          }
+          const c = p.getAttribute('position');
+          p.setAttribute('position', `${c.x} ${c.y + 0.024} ${c.z}`);
+          p.setAttribute('material', `opacity: ${Math.max(0, 0.75 - age)}; transparent: true`);
+        }, 40);
+      }
+    }
+
+    function spawnCashBill(amount) {
+      const reg = document.getElementById('cash-register').object3D;
+      const wp = new THREE.Vector3();
+      reg.getWorldPosition(wp);
+
+      const container = document.getElementById('dynamic-items');
+      const bill = document.createElement('a-box');
+      bill.setAttribute('position', `${wp.x - 0.35} ${wp.y + 0.08} ${wp.z + 0.1}`);
+      bill.setAttribute('width', '0.15'); bill.setAttribute('height', '0.01'); bill.setAttribute('depth', '0.075');
+      bill.setAttribute('color', '#2ecc71');
+      container.appendChild(bill);
+
+      let t = 0;
+      const anim = setInterval(() => {
+        t += 0.09;
+        if (t >= 1) {
+          clearInterval(anim);
+          if (bill.parentNode) bill.parentNode.removeChild(bill);
+          const loop = document.getElementById('scene').components['cafe-game-loop'];
+          if (loop) loop.addCash(amount);
+          return;
+        }
+        bill.setAttribute('position', `${wp.x - 0.35 + t * 0.35} ${wp.y + 0.08 + Math.sin(t * Math.PI) * 0.25} ${wp.z + 0.1 - t * 0.1}`);
+        bill.setAttribute('rotation', `0 ${t * 360} 0`);
+      }, 30);
+    }
+
+    /**
+     * =========================================================================
+     * 4. VR LOCOMOTION (Left Thumbstick Walk + Right Thumbstick 30° Snap Turn)
+     * =========================================================================
+     */
+    AFRAME.registerComponent('vr-locomotion', {
+      schema: { hand: { default: 'left' } },
+      init() {
+        this.stickX = 0;
+        this.stickY = 0;
+        this.snapReady = true;
+
+        this.el.addEventListener('thumbstickmoved', (evt) => {
+          this.stickX = evt.detail.x;
+          this.stickY = evt.detail.y;
+        });
+      },
+      tick(time, dt) {
+        const s = Math.min(dt / 1000, 0.05);
+        const rig = document.getElementById('rig');
+        const cam = document.getElementById('camera');
+        if (!rig || !cam) return;
+
+        // Also poll raw WebXR gamepad axes directly so Quest 2 / Quest 3 never misses input
+        const tracked = this.el.components['tracked-controls'];
+        if (tracked && tracked.controller && tracked.controller.gamepad) {
+          const axes = tracked.controller.gamepad.axes;
+          if (axes && axes.length >= 4) {
+            this.stickX = axes[2];
+            this.stickY = axes[3];
+          } else if (axes && axes.length >= 2) {
+            this.stickX = axes[0];
+            this.stickY = axes[1];
+          }
+        }
+
+        if (this.data.hand === 'left') {
+          // Smooth locomotion within kitchen floor bounds
+          if (Math.abs(this.stickX) > 0.15 || Math.abs(this.stickY) > 0.15) {
+            const forward = new THREE.Vector3(0, 0, -1);
+            forward.applyQuaternion(cam.object3D.getWorldQuaternion(new THREE.Quaternion()));
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+            const speed = 2.1 * s;
+
+            const pos = rig.object3D.position;
+            pos.addScaledVector(forward, -this.stickY * speed);
+            pos.addScaledVector(right, this.stickX * speed);
+
+            // Clamp safely inside the U-shaped kitchen
+            pos.x = Math.max(-2.1, Math.min(2.1, pos.x));
+            pos.z = Math.max(0.15, Math.min(2.35, pos.z));
+          }
+        } else if (this.data.hand === 'right') {
+          // 30-degree Snap Turn on right thumbstick
+          if (Math.abs(this.stickX) > 0.65 && this.snapReady) {
+            this.snapReady = false;
+            const rot = rig.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+            const deltaDeg = this.stickX > 0 ? -30 : 30;
+            rig.setAttribute('rotation', `${rot.x} ${rot.y + deltaDeg} ${rot.z}`);
+            SFX.pop();
+          } else if (Math.abs(this.stickX) < 0.25) {
+            this.snapReady = true;
+          }
+        }
+      }
+    });
+
+    /**
+     * =========================================================================
+     * 5. BULLETPROOF VR HAND GRABBER (Raw Gamepad Poll + 0.65m Sphere + 1.4m Ray)
+     * =========================================================================
+     */
+    AFRAME.registerComponent('grabbable', {
+      schema: { type: { default: 'item' }, name: { default: 'Предмет' } },
+      init() {
+        this.isHeld = false;
+        this.holder = null;
+        this.velocity = new THREE.Vector3();
+        this.lastPos = new THREE.Vector3();
+        this.isThrown = false;
+      },
+      tick(time, dt) {
+        const s = Math.min(dt / 1000, 0.05);
+        if (this.isHeld && this.holder) {
+          const target = new THREE.Vector3();
+          const targetQuat = new THREE.Quaternion();
+          this.holder.object3D.getWorldPosition(target);
+          this.holder.object3D.getWorldQuaternion(targetQuat);
+
+          this.velocity.subVectors(target, this.lastPos).divideScalar(Math.max(s, 0.016));
+          this.lastPos.copy(target);
+
+          // 1:1 World transform sync with zero parent-matrix distortion
+          this.el.object3D.position.copy(target);
+          if (this.el.dataset.itemType === 'knife') {
+            this.el.object3D.quaternion.copy(targetQuat);
+          }
+        } else if (this.isThrown) {
+          this.velocity.y -= 9.8 * s;
+          this.el.object3D.position.addScaledVector(this.velocity, s);
+          if (this.el.object3D.position.y <= 0.96) {
+            this.el.object3D.position.y = 0.96;
+            this.isThrown = false;
+            this.velocity.set(0, 0, 0);
+          }
+        }
+      }
+    });
+
+    AFRAME.registerComponent('vr-grabber', {
+      schema: { hand: { default: 'right' } },
+      init() {
+        this.heldEl = null;
+        this.buttonCooldown = 0;
+        this.wasGrabPressed = false;
+
+        const grabStart = () => {
+          SFX.unlock();
+          this.tryGrabOrPress();
+        };
+        const grabEnd = () => {
+          this.releaseGrab();
+        };
+
+        // Listen to all Meta Quest & standard WebXR controller grab/trigger events
+        ['gripdown', 'triggerdown', 'selectstart', 'squeezestart', 'abuttondown', 'xbuttondown'].forEach(ev => {
+          this.el.addEventListener(ev, grabStart);
+        });
+        ['gripup', 'triggerup', 'selectend', 'squeezeend', 'abuttonup', 'xbuttonup'].forEach(ev => {
+          this.el.addEventListener(ev, grabEnd);
+        });
+      },
+      getControllerForwardRay() {
+        const origin = new THREE.Vector3();
+        const quat = new THREE.Quaternion();
+        this.el.object3D.getWorldPosition(origin);
+        this.el.object3D.getWorldQuaternion(quat);
+        // Quest Touch controllers point forward along -Z tilted slightly downward (-25 deg)
+        const dir = new THREE.Vector3(0, -0.35, -1).applyQuaternion(quat).normalize();
+        return { origin, dir };
+      },
+      findBestTarget() {
+        const { origin, dir } = this.getControllerForwardRay();
+        let best = null;
+        let bestScore = Infinity;
+
+        const candidates = [
+          ...document.querySelectorAll('[tactile-button]'),
+          ...document.querySelectorAll('[grabbable]'),
+          ...document.querySelectorAll('[ingredient-crate]')
+        ];
+
+        candidates.forEach(el => {
+          const g = el.components.grabbable;
+          if (g && g.isHeld) return;
+
+          const p = new THREE.Vector3();
+          el.object3D.getWorldPosition(p);
+          const dist = origin.distanceTo(p);
+
+          // 1. Generous 0.65m close-hand grab sphere
+          if (dist < 0.65) {
+            if (dist < bestScore) {
+              bestScore = dist;
+              best = el;
+            }
+            return;
+          }
+
+          // 2. Forward 1.45m reach cone/laser fallback so player never struggles to reach counters
+          const toP = p.clone().sub(origin);
+          const proj = toP.dot(dir);
+          if (proj > 0.1 && proj < 1.45) {
+            const perp = toP.clone().sub(dir.clone().multiplyScalar(proj)).length();
+            if (perp < 0.24 && (0.65 + perp) < bestScore) {
+              bestScore = 0.65 + perp;
+              best = el;
+            }
+          }
+        });
+
+        return best;
+      },
+      tick(time, dt) {
+        if (this.buttonCooldown > 0) this.buttonCooldown -= dt;
+
+        // Direct hardware gamepad polling for Quest 2 / Quest 3 Trigger (0) & Grip (1)
+        let rawPressed = false;
+        const tracked = this.el.components['tracked-controls'];
+        if (tracked && tracked.controller && tracked.controller.gamepad) {
+          const btns = tracked.controller.gamepad.buttons;
+          if (btns) {
+            for (let i = 0; i < Math.min(btns.length, 4); i++) {
+              if (btns[i] && (btns[i].pressed || btns[i].value > 0.55)) {
+                rawPressed = true;
+                break;
+              }
+            }
+          }
+        }
+        if (rawPressed && !this.wasGrabPressed) {
+          SFX.unlock();
+          this.tryGrabOrPress();
+        } else if (!rawPressed && this.wasGrabPressed) {
+          this.releaseGrab();
+        }
+        this.wasGrabPressed = rawPressed;
+
+        const handPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(handPos);
+
+        // Direct physical touch press on 3D buttons (Blender button / Service bell)
+        if (this.buttonCooldown <= 0) {
+          document.querySelectorAll('[tactile-button]').forEach(btn => {
+            const bPos = new THREE.Vector3();
+            btn.object3D.getWorldPosition(bPos);
+            if (handPos.distanceTo(bPos) < 0.18) {
+              this.buttonCooldown = 700;
+              btn.components['tactile-button'].press();
+            }
+          });
+        }
+
+        // Visual halo & laser feedback when aiming/near any grabbable item or crate
+        const halo = this.el.querySelector('.grab-halo');
+        const ray = this.el.querySelector('.grab-ray');
+        if (!halo) return;
+
+        if (this.heldEl) {
+          halo.setAttribute('material', 'color: #2ecc71; shader: flat; opacity: 0.95');
+          if (ray) ray.setAttribute('visible', 'false');
+          return;
+        }
+        if (ray) ray.setAttribute('visible', 'true');
+
+        const hoverTarget = this.findBestTarget();
+        const activeColor = hoverTarget ? '#2ecc71' : '#ff9800';
+        halo.setAttribute('material', `color: ${activeColor}; shader: flat; opacity: 0.9`);
+        if (ray) ray.setAttribute('material', `color: ${activeColor}; shader: flat; opacity: ${hoverTarget ? 0.75 : 0.3}`);
+      },
+      tryGrabOrPress() {
+        if (this.heldEl) return;
+        const target = this.findBestTarget();
+        if (!target) return;
+
+        if (target.hasAttribute('tactile-button')) {
+          target.components['tactile-button'].press();
+          return;
+        }
+
+        if (target.hasAttribute('grabbable')) {
+          this.attach(target);
+          return;
+        }
+
+        if (target.hasAttribute('ingredient-crate')) {
+          const handPos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(handPos);
+          const itemType = target.getAttribute('ingredient-crate').itemType;
+          const spawned = spawnFoodEntity(itemType, handPos, 'raw');
+          this.attach(spawned);
+        }
+      },
+      attach(el) {
+        this.heldEl = el;
+        const g = el.components.grabbable;
+        g.isHeld = true;
+        g.isThrown = false;
+        g.holder = this.el;
+        this.el.object3D.getWorldPosition(g.lastPos);
+        SFX.pop();
+      },
+      releaseGrab() {
+        if (!this.heldEl) return;
+        const el = this.heldEl;
+        const g = el.components.grabbable;
+        g.isHeld = false;
+        g.holder = null;
+
+        if (g.velocity.length() > 1.15) {
+          g.isThrown = true;
+          g.velocity.multiplyScalar(1.45);
+        } else {
+          // Snap onto counter height neatly if dropped near countertop
+          const p = el.object3D.position;
+          if (p.y > 0.75 && p.y < 1.45) {
+            if (p.x < -1.95 && p.y > 1.10) p.y = 1.20;
+            else p.y = 0.96;
+          }
+        }
+        this.heldEl = null;
+      }
+    });
+
+    /**
+     * =========================================================================
+     * 6. TACTILE STATIONS: BUTTONS, KNIFE SLICING, STOVE FRYING, BLENDER
+     * =========================================================================
+     */
+    AFRAME.registerComponent('ingredient-crate', {
+      schema: { itemType: { default: 'bacon' }, label: { default: 'Бекон' } }
+    });
+
+    AFRAME.registerComponent('tactile-button', {
+      schema: { action: { default: 'bell' } },
+      press() {
+        if (this.data.action === 'blend') {
+          document.getElementById('blender-station').components['potion-blender'].blend();
+        } else if (this.data.action === 'bell') {
+          SFX.bell();
+          const loop = document.getElementById('scene').components['cafe-game-loop'];
+          if (loop) loop.onBellPressed();
+        }
+      }
+    });
+
+    // Knife Slicing (Works both when swinging knife in VR or clicking food while holding knife on PC)
+    function sliceFoodItem(targetEl) {
+      const sliceMap = {
+        cucumber: 'cucumber_slice',
+        watermelon: 'watermelon_slice',
+        pumpkin: 'pumpkin_slice',
+        sausage: 'sausage_slice'
+      };
+      const type = targetEl.dataset.itemType;
+      const sliceType = sliceMap[type];
+      if (!sliceType) return false;
+
+      SFX.chop();
+      const tPos = new THREE.Vector3();
+      targetEl.object3D.getWorldPosition(tPos);
+      const cookState = targetEl.dataset.cookState || 'raw';
+
+      for (let i = -1; i <= 1; i++) {
+        spawnFoodEntity(sliceType, {
+          x: tPos.x + i * 0.055,
+          y: 0.96,
+          z: tPos.z + (Math.random() - 0.5) * 0.04
+        }, cookState);
+      }
+      spawnSteamBurst(tPos, '#fff59d', 4);
+      if (targetEl.parentNode) targetEl.parentNode.removeChild(targetEl);
+      return true;
+    }
+
+    AFRAME.registerComponent('knife-slicer', {
+      init() {
+        this.cooldown = 0;
+      },
+      tick(time, dt) {
+        if (this.cooldown > 0) {
+          this.cooldown -= dt;
+          return;
+        }
+        const knifePos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(knifePos);
+
+        document.querySelectorAll('[grabbable]').forEach(target => {
+          if (target === this.el) return;
+          const g = target.components.grabbable;
+          if (g && g.isHeld) return;
+          const tPos = new THREE.Vector3();
+          target.object3D.getWorldPosition(tPos);
+          if (knifePos.distanceTo(tPos) < 0.18) {
+            if (sliceFoodItem(target)) {
+              this.cooldown = 400;
+            }
+          }
+        });
+      }
+    });
+
+    // Sizzling Stove Fryer (~5 seconds to golden cooked, ~11 seconds to burnt)
+    AFRAME.registerComponent('stove-fryer', {
+      init() {
+        this.steamTimer = 0;
+      },
+      tick(time, dt) {
+        const s = dt / 1000;
+        this.steamTimer += s;
+        const pan1 = new THREE.Vector3(1.40, 0.98, 0.08);
+        const pan2 = new THREE.Vector3(1.40, 0.98, 0.43);
+
+        let sizzling = false;
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          const type = item.dataset.itemType;
+          const info = FOOD_PROPS[type];
+          if (!info || !info.cookable) return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+
+          const p = item.object3D.position;
+          if ((p.distanceTo(pan1) < 0.25 || p.distanceTo(pan2) < 0.25) && Math.abs(p.y - 0.96) < 0.14) {
+            sizzling = true;
+            let t = parseFloat(item.dataset.cookTime || '0') + s;
+            item.dataset.cookTime = t.toFixed(2);
+
+            const mesh = item.querySelector('.food-mesh');
+            if (t >= 5.0 && t < 11.5 && item.dataset.cookState !== 'cooked') {
+              item.dataset.cookState = 'cooked';
+              if (mesh) mesh.setAttribute('color', info.cooked);
+              SFX.pop();
+            } else if (t >= 11.5 && item.dataset.cookState !== 'burnt') {
+              item.dataset.cookState = 'burnt';
+              if (mesh) mesh.setAttribute('color', info.burnt);
+            }
+
+            if (this.steamTimer > 0.36) {
+              spawnSteamBurst(p, item.dataset.cookState === 'burnt' ? '#333333' : '#ffffff', 1);
+            }
+          }
+        });
+
+        if (this.steamTimer > 0.36) {
+          this.steamTimer = 0;
+          if (sizzling) SFX.sizzle();
+        }
+      }
+    });
+
+    // Blender & Weird Mutation Recipes
+    AFRAME.registerComponent('potion-blender', {
+      init() {
+        this.items = [];
+      },
+      tick() {
+        const jarPos = new THREE.Vector3(1.40, 1.25, 1.15);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          const type = item.dataset.itemType;
+          if (!type || type === 'knife' || type === 'drink') return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+
+          if (item.object3D.position.distanceTo(jarPos) < 0.28 && this.items.length < 4) {
+            this.addIngredient(item);
+          }
+        });
+      },
+      addIngredient(itemEl) {
+        if (this.items.length >= 4) return;
+        this.items.push(itemEl.dataset.itemType);
+        SFX.pop();
+        if (itemEl.parentNode) itemEl.parentNode.removeChild(itemEl);
+        this.updateJarVisual();
+      },
+      updateJarVisual() {
+        const liq = document.getElementById('blender-liquid');
+        if (this.items.length === 0) {
+          liq.setAttribute('visible', 'false');
+          return;
+        }
+        const prof = this.resolveRecipe(this.items);
+        liq.setAttribute('visible', 'true');
+        liq.setAttribute('color', prof.color);
+        const h = 0.06 + this.items.length * 0.055;
+        liq.setAttribute('height', h);
+        liq.setAttribute('position', `0 ${0.20 + h / 2} 0`);
+      },
+      resolveRecipe(list) {
+        const has = (k) => list.some(x => x.includes(k));
+        // Pumpkin + Boot (or Duck) = Fear Potion against Robber!
+        if (has('pumpkin') && (has('boot') || has('duck'))) {
+          return { effect: 'fear', label: 'Зелье Страха', tag: 'СТРАХ!', color: '#7e22ce' };
+        }
+        // Bacon + Sausage = Ultra-thin Bone/Thread Arms Mutation!
+        if (has('bacon') && has('sausage')) {
+          return { effect: 'thread_arms', label: 'Смузи «Руки-Нитки»', tag: 'НИТКИ!', color: '#d84315' };
+        }
+        // Watermelon + Pumpkin = Giant Pumpkin Head Mutation!
+        if (has('watermelon') && has('pumpkin')) {
+          return { effect: 'pumpkin_head', label: 'Сок «Тыквоголова»', tag: 'ТЫКВА!', color: '#ff6f00' };
+        }
+        // Cucumber + Bacon = Bright Green Shrink Mutation!
+        if (has('cucumber') && has('bacon')) {
+          return { effect: 'green_shrink', label: 'Зелье «Зелёный Карлик»', tag: 'КАРЛИК!', color: '#2e7d32' };
+        }
+        // Any Boot/Duck gross mix also scares robber a bit or grosses out guests
+        if (has('boot') || has('duck')) {
+          return { effect: 'fear', label: 'Вонючее Зелье Страха', tag: 'ФУ-СТРАХ!', color: '#6a1b9a' };
+        }
+        return { effect: 'tasty', label: 'Фирменный Напиток', tag: 'СМУЗИ', color: '#ec407a' };
+      },
+      blend() {
+        if (this.items.length === 0) {
+          SFX.tone(150, 'sawtooth', 0.18, 0.15);
+          return;
+        }
+        SFX.blend();
+        const profile = this.resolveRecipe(this.items);
+        const out = document.getElementById('drink-output-spot').object3D;
+        const pos = new THREE.Vector3();
+        out.getWorldPosition(pos);
+
+        spawnPotionCup(profile, { x: pos.x, y: 0.96, z: pos.z });
+        spawnSteamBurst({ x: 1.40, y: 1.45, z: 1.15 }, profile.color, 4);
+
+        this.items = [];
+        this.updateJarVisual();
+      }
+    });
+
+    // Trash Bin
+    AFRAME.registerComponent('trash-bin', {
+      tick() {
+        const binPos = new THREE.Vector3(1.15, 0.52, 1.85);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          if (item.dataset.itemType === 'knife') return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+          if (item.object3D.position.distanceTo(binPos) < 0.28) {
+            SFX.pop();
+            if (item.parentNode) item.parentNode.removeChild(item);
+          }
+        });
+      }
+    });
+
+    /**
+     * =========================================================================
+     * 7. AUTOMATIC CUSTOMER SPAWNING, MUTATIONS, ROBBER EVENT & DESKTOP INPUT
+     * =========================================================================
+     */
+    AFRAME.registerComponent('cafe-game-loop', {
+      init() {
+        buildAllTextures();
+        this.cash = 0;
+        this.servedCount = 0;
+        this.guestEl = null;
+        this.order = null;
+        this.isRobber = false;
+        this.robberStealTimer = 0;
+        this.spawnScheduled = false;
+
+        updateRegisterDisplay(0, 0);
+        this.initDesktopControls();
+
+        // Automatically spawn the first customer 1.0 second after scene loads!
+        this.scheduleNextGuest(1000);
+      },
+
+      scheduleNextGuest(delayMs) {
+        if (this.spawnScheduled) return;
+        this.spawnScheduled = true;
+        setTimeout(() => {
+          this.spawnScheduled = false;
+          if (!this.guestEl) {
+            this.spawnGuest();
+          }
+        }, delayMs);
+      },
+
+      addCash(delta) {
+        this.cash = Math.max(0, this.cash + delta);
+        SFX.cash();
+        updateRegisterDisplay(this.cash, this.servedCount);
+      },
+
+      onBellPressed() {
+        if (!this.guestEl) {
+          this.spawnGuest();
+        } else if (!this.isRobber) {
+          this.dismissGuest(false);
+        }
+      },
+
+      spawnGuest() {
+        const stage = document.getElementById('customer-stage');
+        stage.innerHTML = '';
+
+        // Every 3rd visitor is the Masked Robber!
+        const makeRobber = (this.servedCount > 0 && this.servedCount % 3 === 0 && !this.lastWasRobber);
+        this.lastWasRobber = makeRobber;
+
+        if (makeRobber) {
+          this.spawnRobber(stage);
+          return;
+        }
+
+        this.isRobber = false;
+        const archetypes = [
+          { name: 'Бизнесмен', skin: '#ffcc99', shirt: '#2c3e50', tie: '#e74c3c', pitch: 180 },
+          { name: 'Бабуля', skin: '#fadbd8', shirt: '#8e44ad', hat: '#f8bbd0', pitch: 330 },
+          { name: 'Панк-Рокер', skin: '#f5cba7', shirt: '#212121', mohawk: '#e91e63', pitch: 240 },
+          { name: 'Турист', skin: '#e0ac69', shirt: '#00acc1', glasses: true, pitch: 210 },
+          { name: 'Шеф-Повар', skin: '#ffdbac', shirt: '#ffffff', chefHat: true, pitch: 165 }
+        ];
+        const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
+
+        const guest = document.createElement('a-entity');
+        guest.setAttribute('position', '-2.6 0 0');
+        guest.classList.add('active-guest');
+
+        // Torso
+        const torso = document.createElement('a-box');
+        torso.setAttribute('position', '0 1.05 0');
+        torso.setAttribute('width', '0.46'); torso.setAttribute('height', '0.66'); torso.setAttribute('depth', '0.28');
+        torso.setAttribute('color', arch.shirt);
+        guest.appendChild(torso);
+
+        // Head Group (can inflate into giant pumpkin!)
+        const headGroup = document.createElement('a-entity');
+        headGroup.setAttribute('position', '0 1.62 0');
+        headGroup.classList.add('guest-head');
+
+        const head = document.createElement('a-box');
+        head.setAttribute('width', '0.36'); head.setAttribute('height', '0.36'); head.setAttribute('depth', '0.36');
+        head.setAttribute('color', arch.skin);
+        head.classList.add('guest-skin');
+        headGroup.appendChild(head);
+
+        // Cartoon Eyes
+        [-0.08, 0.08].forEach(ex => {
+          const eye = document.createElement('a-sphere');
+          eye.setAttribute('radius', '0.045'); eye.setAttribute('position', `${ex} 0.04 0.18`);
+          eye.setAttribute('color', '#ffffff');
+          const pupil = document.createElement('a-sphere');
+          pupil.setAttribute('radius', '0.022'); pupil.setAttribute('position', '0 0 0.035');
+          pupil.setAttribute('color', '#111111');
+          eye.appendChild(pupil);
+          headGroup.appendChild(eye);
+        });
+
+        // Mouth
+        const mouth = document.createElement('a-box');
+        mouth.setAttribute('width', '0.12'); mouth.setAttribute('height', '0.035'); mouth.setAttribute('depth', '0.03');
+        mouth.setAttribute('position', '0 -0.08 0.18');
+        mouth.setAttribute('color', '#5d1916');
+        headGroup.appendChild(mouth);
+
+        // Archetype Accessories
+        if (arch.tie) {
+          const tie = document.createElement('a-box');
+          tie.setAttribute('width', '0.07'); tie.setAttribute('height', '0.32'); tie.setAttribute('depth', '0.03');
+          tie.setAttribute('position', '0 1.12 0.15'); tie.setAttribute('color', arch.tie);
+          guest.appendChild(tie);
+        }
+        if (arch.hat) {
+          const brim = document.createElement('a-cylinder');
+          brim.setAttribute('radius', '0.28'); brim.setAttribute('height', '0.03'); brim.setAttribute('position', '0 0.19 0');
+          brim.setAttribute('color', arch.hat);
+          const crown = document.createElement('a-cylinder');
+          crown.setAttribute('radius', '0.17'); crown.setAttribute('height', '0.12'); crown.setAttribute('position', '0 0.25 0');
+          crown.setAttribute('color', '#f48fb1');
+          headGroup.appendChild(brim); headGroup.appendChild(crown);
+        }
+        if (arch.mohawk) {
+          const mk = document.createElement('a-box');
+          mk.setAttribute('width', '0.07'); mk.setAttribute('height', '0.18'); mk.setAttribute('depth', '0.34');
+          mk.setAttribute('position', '0 0.24 0'); mk.setAttribute('color', arch.mohawk);
+          headGroup.appendChild(mk);
+        }
+        if (arch.glasses) {
+          const gl = document.createElement('a-box');
+          gl.setAttribute('width', '0.30'); gl.setAttribute('height', '0.08'); gl.setAttribute('depth', '0.04');
+          gl.setAttribute('position', '0 0.04 0.19'); gl.setAttribute('color', '#111111');
+          headGroup.appendChild(gl);
+        }
+        if (arch.chefHat) {
+          const toque = document.createElement('a-cylinder');
+          toque.setAttribute('radius', '0.16'); toque.setAttribute('height', '0.24'); toque.setAttribute('position', '0 0.28 0');
+          toque.setAttribute('color', '#ffffff');
+          headGroup.appendChild(toque);
+        }
+        guest.appendChild(headGroup);
+
+        // Left & Right Arms (Can mutate into ultra-thin bone/thread sticks!)
+        const lArmPivot = document.createElement('a-entity');
+        lArmPivot.setAttribute('position', '-0.30 1.28 0');
+        lArmPivot.classList.add('guest-arm-l');
+        const lArm = document.createElement('a-box');
+        lArm.setAttribute('position', '0 -0.22 0'); lArm.setAttribute('width', '0.10'); lArm.setAttribute('height', '0.52'); lArm.setAttribute('depth', '0.10');
+        lArm.setAttribute('color', arch.skin); lArm.classList.add('guest-skin', 'arm-mesh');
+        lArmPivot.appendChild(lArm);
+
+        const rArmPivot = document.createElement('a-entity');
+        rArmPivot.setAttribute('position', '0.30 1.28 0');
+        rArmPivot.classList.add('guest-arm-r');
+        const rArm = document.createElement('a-box');
+        rArm.setAttribute('position', '0 -0.22 0'); rArm.setAttribute('width', '0.10'); rArm.setAttribute('height', '0.52'); rArm.setAttribute('depth', '0.10');
+        rArm.setAttribute('color', arch.skin); rArm.classList.add('guest-skin', 'arm-mesh');
+        rArmPivot.appendChild(rArm);
+
+        guest.appendChild(lArmPivot);
+        guest.appendChild(rArmPivot);
+
+        // Large 3D Floating Order Bubble directly above the Customer's Head!
+        const bubble = document.createElement('a-plane');
+        bubble.setAttribute('id', 'active-order-bubble');
+        bubble.setAttribute('position', '0 2.38 0.15');
+        bubble.setAttribute('width', '1.25');
+        bubble.setAttribute('height', '0.62');
+        bubble.setAttribute('material', 'src: #tex-order-bubble; shader: flat');
+        guest.appendChild(bubble);
+
+        stage.appendChild(guest);
+        this.guestEl = guest;
+        this.createOrder(arch);
+
+        // Smooth walk-in animation to service window center (x = 0)
+        let wx = -2.6;
+        const walk = setInterval(() => {
+          if (!guest.parentNode) { clearInterval(walk); return; }
+          wx += 0.13;
+          if (wx >= 0) {
+            wx = 0;
+            clearInterval(walk);
+            SFX.mumble(arch.pitch);
+          }
+          guest.setAttribute('position', `${wx} ${Math.abs(Math.sin(wx * 6)) * 0.04} 0`);
+        }, 28);
+      },
+
+      createOrder(arch) {
+        const foodPool = [
+          { type: 'bacon', needCooked: true, label: 'Жареный Бекон' },
+          { type: 'sausage', needCooked: true, label: 'Жареная Сосиска' },
+          { type: 'cucumber_slice', needCooked: false, label: 'Нарезанный Огурец' },
+          { type: 'watermelon_slice', needCooked: false, label: 'Долька Арбуза' },
+          { type: 'pumpkin_slice', needCooked: false, label: 'Кусок Тыквы' }
+        ];
+        const drinkPool = [
+          { label: 'Смузи: Бекон + Сосиска' },
+          { label: 'Сок: Арбуз + Тыква' },
+          { label: 'Зелье: Огурец + Бекон' },
+          { label: 'Любой Напиток из Блендера' }
+        ];
+        const f = foodPool[Math.floor(Math.random() * foodPool.length)];
+        const d = drinkPool[Math.floor(Math.random() * drinkPool.length)];
+
+        this.order = {
+          foodType: f.type,
+          needCooked: f.needCooked,
+          foodDone: false,
+          drinkDone: false
+        };
+
+        updateCustomerOrderBubble(
+          `ГОСТЬ: ${arch.name.toUpperCase()}`,
+          `1) Еда: ${f.label}`,
+          `2) Напиток: ${d.label}`,
+          false
+        );
+      },
+
+      spawnRobber(stage) {
+        this.isRobber = true;
+        this.robberStealTimer = 0;
+
+        const robber = document.createElement('a-entity');
+        robber.setAttribute('position', '2.6 0 0');
+        robber.classList.add('active-guest');
+
+        // Striped Bandit Shirt
+        const torso = document.createElement('a-box');
+        torso.setAttribute('position', '0 1.05 0');
+        torso.setAttribute('width', '0.46'); torso.setAttribute('height', '0.66'); torso.setAttribute('depth', '0.28');
+        torso.setAttribute('color', '#1f2937');
+        robber.appendChild(torso);
+
+        const stripe = document.createElement('a-box');
+        stripe.setAttribute('position', '0 1.08 0');
+        stripe.setAttribute('width', '0.47'); stripe.setAttribute('height', '0.14'); stripe.setAttribute('depth', '0.29');
+        stripe.setAttribute('color', '#ffffff');
+        robber.appendChild(stripe);
+
+        // Head with Black Eye Mask & Beanie
+        const headGroup = document.createElement('a-entity');
+        headGroup.setAttribute('position', '0 1.62 0');
+        const head = document.createElement('a-box');
+        head.setAttribute('width', '0.36'); head.setAttribute('height', '0.36'); head.setAttribute('depth', '0.36');
+        head.setAttribute('color', '#f5cba7'); head.classList.add('robber-face');
+        headGroup.appendChild(head);
+
+        const mask = document.createElement('a-box');
+        mask.setAttribute('width', '0.38'); mask.setAttribute('height', '0.11'); mask.setAttribute('depth', '0.38');
+        mask.setAttribute('position', '0 0.04 0.01'); mask.setAttribute('color', '#111111');
+        headGroup.appendChild(mask);
+
+        const hat = document.createElement('a-sphere');
+        hat.setAttribute('radius', '0.21'); hat.setAttribute('position', '0 0.16 0'); hat.setAttribute('color', '#111111');
+        headGroup.appendChild(hat);
+        robber.appendChild(headGroup);
+
+        // Arms Raised
+        [-0.31, 0.31].forEach(ax => {
+          const arm = document.createElement('a-box');
+          arm.setAttribute('position', `${ax} 1.25 0.15`);
+          arm.setAttribute('rotation', '-65 0 0');
+          arm.setAttribute('width', '0.10'); arm.setAttribute('height', '0.50'); arm.setAttribute('depth', '0.10');
+          arm.setAttribute('color', '#1f2937');
+          arm.classList.add('robber-arm');
+          robber.appendChild(arm);
+        });
+
+        const bubble = document.createElement('a-plane');
+        bubble.setAttribute('id', 'active-order-bubble');
+        bubble.setAttribute('position', '0 2.38 0.15');
+        bubble.setAttribute('width', '1.30');
+        bubble.setAttribute('height', '0.64');
+        bubble.setAttribute('material', 'src: #tex-order-bubble; shader: flat');
+        robber.appendChild(bubble);
+
+        stage.appendChild(robber);
+        this.guestEl = robber;
+
+        updateCustomerOrderBubble(
+          'ОГРАБЛЕНИЕ! ЭТО ГРАБИТЕЛЬ!',
+          'БРОСЬ В НЕГО ЗЕЛЬЕ СТРАХА!',
+          '(Тыква + Ботинок в блендер)',
+          true
+        );
+
+        let rx = 2.6;
+        const sneak = setInterval(() => {
+          if (!robber.parentNode) { clearInterval(sneak); return; }
+          rx -= 0.14;
+          if (rx <= 0) {
+            rx = 0;
+            clearInterval(sneak);
+            SFX.tone(130, 'sawtooth', 0.35, 0.25, 85);
+          }
+          robber.setAttribute('position', `${rx} ${Math.abs(Math.sin(rx * 7)) * 0.04} 0`);
+        }, 28);
+      },
+
+      tick(time, dt) {
+        if (!this.guestEl) return;
+
+        // 1. Check Robber hit/splash with Fear Potion
+        if (this.isRobber) {
+          this.robberStealTimer += dt / 1000;
+          if (this.robberStealTimer >= 15) {
+            this.robberStealTimer = 0;
+            this.addCash(-15);
+          }
+          const rPos = new THREE.Vector3();
+          this.guestEl.object3D.getWorldPosition(rPos);
+
+          document.querySelectorAll('[grabbable]').forEach(item => {
+            if (item.dataset.itemType !== 'drink') return;
+            const p = new THREE.Vector3();
+            item.object3D.getWorldPosition(p);
+            if (p.distanceTo(rPos) < 1.25 && item.dataset.potionEffect === 'fear') {
+              if (item.parentNode) item.parentNode.removeChild(item);
+              this.scareRobber();
+            }
+          });
+          return;
+        }
+
+        // 2. Check Serving Plate Zone (x=0, y=0.96, z=-0.35) for Customer Delivery
+        const platePos = new THREE.Vector3(0, 0.96, -0.35);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          if (item.dataset.itemType === 'knife') return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+          if (item.object3D.position.distanceTo(platePos) < 0.36) {
+            this.serveItemToCustomer(item);
+          }
+        });
+      },
+
+      serveItemToCustomer(item) {
+        if (!this.guestEl || !this.order) return;
+        const type = item.dataset.itemType;
+        const cookState = item.dataset.cookState || 'raw';
+        const effect = item.dataset.potionEffect || 'none';
+
+        if (item.parentNode) item.parentNode.removeChild(item);
+        spawnSteamBurst({ x: 0, y: 1.05, z: -0.35 }, '#fff59d', 3);
+
+        if (cookState === 'burnt' || type === 'boot') {
+          SFX.mutate();
+          spawnSteamBurst({ x: 0, y: 1.6, z: -1.15 }, '#333333', 4);
+          updateCustomerOrderBubble('ФУ! ГОРЕЛОЕ / БОТИНОК!', 'Гость убежал в ужасе!', 'Ждём следующего...', true);
+          this.dismissGuest(false);
+          return;
+        }
+
+        if (type === 'drink') {
+          this.order.drinkDone = true;
+          this.mutateGuest(effect);
+        } else {
+          this.order.foodDone = true;
+          SFX.pop();
+        }
+
+        if (this.order.foodDone && this.order.drinkDone) {
+          this.servedCount++;
+          spawnCashBill(25);
+          updateCustomerOrderBubble('СПАСИБО! +$25', 'Заказ выполнен!', 'Следующий гость скоро...', false);
+          setTimeout(() => this.dismissGuest(true), 2000);
+        } else {
+          updateCustomerOrderBubble(
+            'ВКУСНО! ЧТО ЕЩЁ?',
+            this.order.foodDone ? 'Еда: ГОТОВО ✔' : 'Жду еду на тарелку!',
+            this.order.drinkDone ? 'Напиток: ГОТОВО ✔' : 'Жду напиток из блендера!',
+            false
+          );
+        }
+      },
+
+      mutateGuest(effect) {
+        const g = this.guestEl;
+        if (!g) return;
+
+        if (effect === 'thread_arms') {
+          // Arms mutate into ultra-thin bone/thread sticks ("тонкие с нитку / как кости")!
+          SFX.mutate();
+          g.querySelectorAll('.arm-mesh').forEach(arm => {
+            arm.setAttribute('width', '0.015');
+            arm.setAttribute('depth', '0.015');
+            arm.setAttribute('height', '0.68');
+            arm.setAttribute('color', '#f5f5dc');
+          });
+          const l = g.querySelector('.guest-arm-l');
+          const r = g.querySelector('.guest-arm-r');
+          if (l) l.setAttribute('rotation', '0 0 -135');
+          if (r) r.setAttribute('rotation', '0 0 135');
+        } else if (effect === 'pumpkin_head') {
+          SFX.mutate();
+          const hg = g.querySelector('.guest-head');
+          if (hg) hg.setAttribute('scale', '2.15 2.15 2.15');
+          g.querySelectorAll('.guest-skin').forEach(s => s.setAttribute('color', '#f57c00'));
+        } else if (effect === 'green_shrink') {
+          SFX.mutate();
+          g.setAttribute('scale', '0.78 0.72 0.78');
+          g.querySelectorAll('.guest-skin').forEach(s => s.setAttribute('color', '#43a047'));
+        } else {
+          SFX.pop();
+        }
+      },
+
+      scareRobber() {
+        if (!this.isRobber || !this.guestEl) return;
+        this.isRobber = false;
+        SFX.robberScream();
+
+        const robber = this.guestEl;
+        const face = robber.querySelector('.robber-face');
+        if (face) face.setAttribute('color', '#e0f7fa');
+        robber.querySelectorAll('.robber-arm').forEach(arm => {
+          arm.setAttribute('width', '0.022');
+          arm.setAttribute('depth', '0.022');
+          arm.setAttribute('rotation', '-160 0 0');
+        });
+
+        spawnSteamBurst({ x: 0, y: 1.5, z: -1.15 }, '#ce93d8', 5);
+        spawnCashBill(50);
+        updateCustomerOrderBubble('ГРАБИТЕЛЬ УБЕЖАЛ В УЖАСЕ!', 'БОНУС ЗА СМЕЛОСТЬ: +$50', 'Отличная работа, шеф!', false);
+
+        let rx = 0;
+        const flee = setInterval(() => {
+          rx -= 0.28;
+          robber.setAttribute('position', `${rx} ${Math.abs(Math.sin(rx * 12)) * 0.08} 0`);
+          if (rx <= -3.5) {
+            clearInterval(flee);
+            if (robber.parentNode) robber.parentNode.removeChild(robber);
+            this.guestEl = null;
+            this.scheduleNextGuest(2500);
+          }
+        }, 25);
+      },
+
+      dismissGuest(happy) {
+        const guest = this.guestEl;
+        this.guestEl = null;
+        this.order = null;
+        if (!guest) {
+          this.scheduleNextGuest(2500);
+          return;
+        }
+        let gx = 0;
+        const leave = setInterval(() => {
+          gx += happy ? 0.16 : -0.22;
+          guest.setAttribute('position', `${gx} 0 0`);
+          if (Math.abs(gx) >= 3.2) {
+            clearInterval(leave);
+            if (guest.parentNode) guest.parentNode.removeChild(guest);
+            this.scheduleNextGuest(2500);
+          }
+        }, 28);
+      },
+
+      /**
+       * Desktop Mouse & Keyboard Interaction (Works BOTH with unlocked mouse cursor AND pointer-lock!)
+       */
+      initDesktopControls() {
+        let held = null;
+        const anchor = document.getElementById('desktop-hold-anchor');
+        const raycaster = new THREE.Raycaster();
+        const mouseNDC = new THREE.Vector2(0, 0);
+
+        const getDesktopRay = (clientX, clientY) => {
+          const camEl = document.getElementById('camera');
+          const threeCam = camEl.getObject3D('camera');
+          if (document.pointerLockElement || clientX === undefined || clientY === undefined) {
+            mouseNDC.set(0, 0);
+          } else {
+            mouseNDC.x = (clientX / window.innerWidth) * 2 - 1;
+            mouseNDC.y = -(clientY / window.innerHeight) * 2 + 1;
+          }
+          raycaster.setFromCamera(mouseNDC, threeCam);
+          return {
+            rayOrigin: raycaster.ray.origin.clone(),
+            rayDir: raycaster.ray.direction.clone().normalize()
+          };
+        };
+
+        const findTargetAlongRay = (rayOrigin, rayDir, selector, maxDist, hitRadius) => {
+          let best = null;
+          let bestDist = maxDist;
+          document.querySelectorAll(selector).forEach(el => {
+            const p = new THREE.Vector3();
+            el.object3D.getWorldPosition(p);
+            const toP = p.clone().sub(rayOrigin);
+            const proj = toP.dot(rayDir);
+            if (proj > 0.12 && proj < bestDist) {
+              const perp = toP.clone().sub(rayDir.clone().multiplyScalar(proj)).length();
+              if (perp < hitRadius) {
+                bestDist = proj;
+                best = el;
+              }
+            }
+          });
+          return best;
+        };
+
+        const dropOrThrowHeld = (rayOrigin, rayDir, forceThrow = false) => {
+          if (!held) return;
+          const g = held.components.grabbable;
+          g.isHeld = false;
+          g.holder = null;
+
+          if (forceThrow) {
+            g.isThrown = true;
+            g.velocity.copy(rayDir).multiplyScalar(7.5);
+            g.velocity.y += 1.6;
+          } else {
+            const dropPos = rayOrigin.clone().addScaledVector(rayDir, 1.05);
+            dropPos.y = 0.96;
+            held.object3D.position.copy(dropPos);
+          }
+          held = null;
+        };
+
+        const handleDesktopInteract = (clientX, clientY) => {
+          if (this.el.is('vr-mode')) return;
+          SFX.unlock();
+          const { rayOrigin, rayDir } = getDesktopRay(clientX, clientY);
+
+          // CASE A: Currently holding an item on Desktop
+          if (held) {
+            // 1. If holding Knife and clicking a sliceable food item -> Slice it immediately!
+            if (held.dataset.itemType === 'knife') {
+              const foodTarget = findTargetAlongRay(rayOrigin, rayDir, '[grabbable]', 3.2, 0.34);
+              if (foodTarget && foodTarget !== held && sliceFoodItem(foodTarget)) {
+                return;
+              }
+            }
+
+            // 2. If holding Fear Potion and clicking Robber -> Throw it at him!
+            if (held.dataset.itemType === 'drink' && this.isRobber && this.guestEl) {
+              const gPos = new THREE.Vector3();
+              this.guestEl.object3D.getWorldPosition(gPos);
+              if (rayOrigin.distanceTo(gPos) < 4.2 && rayDir.z < -0.25) {
+                dropOrThrowHeld(rayOrigin, rayDir, true);
+                return;
+              }
+            }
+
+            // 3. Check if clicking directly on Blender -> Drop ingredient inside!
+            const blenderHit = findTargetAlongRay(rayOrigin, rayDir, '#blender-station', 3.4, 0.45);
+            if (blenderHit && held.dataset.itemType !== 'knife' && held.dataset.itemType !== 'drink') {
+              const g = held.components.grabbable;
+              g.isHeld = false;
+              g.holder = null;
+              document.getElementById('blender-station').components['potion-blender'].addIngredient(held);
+              held = null;
+              return;
+            }
+
+            // 4. Check if clicking Serving Plate -> Place directly on Serving Plate!
+            const plateHit = findTargetAlongRay(rayOrigin, rayDir, '#serving-plate', 3.4, 0.50);
+            if (plateHit && held.dataset.itemType !== 'knife') {
+              const g = held.components.grabbable;
+              g.isHeld = false;
+              g.holder = null;
+              held.object3D.position.set(0, 0.96, -0.35);
+              held = null;
+              return;
+            }
+
+            // 5. Check if clicking Stove -> Place onto frying pan!
+            const stoveHit = findTargetAlongRay(rayOrigin, rayDir, '#stove-station', 3.4, 0.50);
+            if (stoveHit && held.dataset.itemType !== 'knife') {
+              const g = held.components.grabbable;
+              g.isHeld = false;
+              g.holder = null;
+              held.object3D.position.set(1.40, 0.96, 0.08);
+              held = null;
+              return;
+            }
+
+            // 6. Check if clicking Chopping Board -> Place onto chopping board!
+            const boardHit = findTargetAlongRay(rayOrigin, rayDir, '#chopping-board', 3.4, 0.48);
+            if (boardHit) {
+              const g = held.components.grabbable;
+              g.isHeld = false;
+              g.holder = null;
+              held.object3D.position.set(-1.30, 0.96, 0.65);
+              held = null;
+              return;
+            }
+
+            // 7. Otherwise place neatly on counter surface in front of gaze
+            dropOrThrowHeld(rayOrigin, rayDir, false);
+            return;
+          }
+
+          // CASE B: Empty hand on Desktop — Check 3D Buttons, Items, or Crates
+          const btnHit = findTargetAlongRay(rayOrigin, rayDir, '[tactile-button]', 3.4, 0.36);
+          if (btnHit) {
+            btnHit.components['tactile-button'].press();
+            return;
+          }
+
+          const itemHit = findTargetAlongRay(rayOrigin, rayDir, '[grabbable]', 3.4, 0.34);
+          if (itemHit) {
+            held = itemHit;
+            const g = itemHit.components.grabbable;
+            g.isHeld = true;
+            g.holder = anchor;
+            SFX.pop();
+            return;
+          }
+
+          const crateHit = findTargetAlongRay(rayOrigin, rayDir, '[ingredient-crate]', 3.6, 0.38);
+          if (crateHit) {
+            const type = crateHit.getAttribute('ingredient-crate').itemType;
+            const p = new THREE.Vector3();
+            crateHit.object3D.getWorldPosition(p);
+            const spawned = spawnFoodEntity(type, p, 'raw');
+            held = spawned;
+            const g = spawned.components.grabbable;
+            g.isHeld = true;
+            g.holder = anchor;
+            SFX.pop();
+          }
+        };
+
+        window.addEventListener('mousedown', (e) => {
+          if (this.el.is('vr-mode')) return;
+          if (e.button === 0) {
+            handleDesktopInteract(e.clientX, e.clientY);
+          } else if (e.button === 2 && held) {
+            const { rayOrigin, rayDir } = getDesktopRay(e.clientX, e.clientY);
+            dropOrThrowHeld(rayOrigin, rayDir, true);
+          }
+        });
+
+        window.addEventListener('contextmenu', (e) => {
+          if (!this.el.is('vr-mode')) e.preventDefault();
+        });
+
+        window.addEventListener('keydown', (e) => {
+          if (this.el.is('vr-mode')) return;
+          if (e.code === 'KeyE' || e.code === 'Space') {
+            handleDesktopInteract(undefined, undefined);
+          } else if (e.code === 'KeyQ' && held) {
+            const { rayOrigin, rayDir } = getDesktopRay(undefined, undefined);
+            dropOrThrowHeld(rayOrigin, rayDir, true);
+          }
+        });
+
+        // Toggle desktop guide visibility when entering/exiting WebXR VR mode
+        this.el.addEventListener('enter-vr', () => {
+          SFX.unlock();
+          const g = document.getElementById('desktop-guide');
+          const r = document.getElementById('desktop-reticle');
+          if (g) g.style.display = 'none';
+          if (r) r.setAttribute('visible', 'false');
+        });
+        this.el.addEventListener('exit-vr', () => {
+          const g = document.getElementById('desktop-guide');
+          const r = document.getElementById('desktop-reticle');
+          if (g) g.style.display = 'block';
+          if (r) r.setAttribute('visible', 'true');
+        });
+      }
+    });
+  </script>
+</body>
+</html>
