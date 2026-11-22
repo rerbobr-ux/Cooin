@@ -1,0 +1,1935 @@
+```html
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VR Кафе: Бекон и Зелья — Quest 2/3</title>
+  <!-- A-Frame 1.6.0 for native WebXR support on Meta Quest 2 & 3 -->
+  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #2b2118;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    /* Minimalist desktop helper overlay ONLY outside VR session */
+    #desktop-hint {
+      position: fixed;
+      bottom: 14px;
+      left: 14px;
+      background: rgba(43, 33, 24, 0.85);
+      color: #fff6e5;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 2px solid #d9822b;
+      font-size: 13px;
+      line-height: 1.4;
+      pointer-events: none;
+      z-index: 10;
+      max-width: 340px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+    }
+    .a-enter-vr-button {
+      background-color: #e06d1b !important;
+      border-radius: 12px !important;
+      border: 2px solid #fff3d6 !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Desktop testing hint (automatically hidden when entering WebXR VR) -->
+  <div id="desktop-hint">
+    <b>Режим Quest 2/3 WebXR + ПК тест:</b><br/>
+    • <b>VR:</b> Нажмите кнопку VR справа внизу. Хватайте предметы кнопкой <b>Grip/Trigger</b>.<br/>
+    • <b>ПК тест:</b> WASD — ходьба, Мышь — обзор, <b>ЛКМ</b> — взять/положить/нажать рычаг, <b>E</b> — ударить ножом / бросить предмет.
+  </div>
+
+  <!-- Main A-Frame Scene with WebXR hand/controller tracking and warm cartoon lighting -->
+  <a-scene
+    id="vr-scene"
+    renderer="antialias: true; colorManagement: true; physicallyCorrectLights: false;"
+    webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking;"
+    background="color: #87ceeb"
+    fog="type: linear; color: #b7e4f9; near: 18; far: 55"
+    game-manager
+  >
+    <!-- Procedural Assets & Canvas Textures -->
+    <a-assets id="game-assets">
+      <canvas id="tex-poster-recipes" width="1024" height="768"></canvas>
+      <canvas id="tex-order-board" width="1024" height="512"></canvas>
+      <canvas id="tex-register-screen" width="512" height="256"></canvas>
+      <canvas id="tex-tiles" width="512" height="512"></canvas>
+      <canvas id="tex-wood" width="512" height="512"></canvas>
+      <canvas id="tex-checkers" width="512" height="512"></canvas>
+      <canvas id="tex-menu-sign" width="1024" height="256"></canvas>
+    </a-assets>
+
+    <!-- Warm, Sunny Cartoon Lighting (No dark void, no neon) -->
+    <a-light type="hemisphere" color="#fff9eb" groundColor="#8c6d53" intensity="0.95"></a-light>
+    <a-light type="directional" color="#fff2d6" intensity="0.85" position="4 8 5"></a-light>
+    <a-light type="point" color="#ffcf87" intensity="0.55" distance="10" position="0 2.6 -0.2"></a-light>
+
+    <!-- ========================================================= -->
+    <!-- PLAYER RIG: Quest 2 / Quest 3 Controllers + Desktop Rig   -->
+    <!-- ========================================================= -->
+    <a-entity id="player-rig" position="0 0 0.45">
+      <a-camera id="player-head" position="0 1.55 0" look-controls="pointerLockEnabled: false" wasd-controls="acceleration: 18">
+        <!-- Subtle reticle only for non-VR desktop testing -->
+        <a-ring id="desktop-reticle" position="0 0 -0.8" radius-inner="0.008" radius-outer="0.014"
+                material="color: #ff7b00; shader: flat; opacity: 0.85"></a-ring>
+        <!-- Desktop held item anchor -->
+        <a-entity id="desktop-hand-anchor" position="0.28 -0.22 -0.55"></a-entity>
+      </a-camera>
+
+      <!-- Left Meta Quest Touch Controller -->
+      <a-entity id="left-hand"
+                oculus-touch-controls="hand: left; model: true"
+                vr-hand-grabber="hand: left">
+        <a-sphere radius="0.035" color="#ffcc80" opacity="0.55" visible="true"></a-sphere>
+      </a-entity>
+
+      <!-- Right Meta Quest Touch Controller -->
+      <a-entity id="right-hand"
+                oculus-touch-controls="hand: right; model: true"
+                vr-hand-grabber="hand: right">
+        <a-sphere radius="0.035" color="#ffcc80" opacity="0.55" visible="true"></a-sphere>
+      </a-entity>
+    </a-entity>
+
+    <!-- ========================================================= -->
+    <!-- EXTERIOR CARTOON WORLD (Seen through diner window & door) -->
+    <!-- ========================================================= -->
+    <a-entity id="exterior-world">
+      <!-- Sunny grass & sidewalk & road -->
+      <a-plane rotation="-90 0 0" width="80" height="80" position="0 -0.05 -12" color="#7ec850"></a-plane>
+      <a-box position="0 -0.02 -5.5" width="40" height="0.06" depth="3.5" color="#d6cfc2"></a-box>
+      <a-box position="0 -0.03 -9.5" width="60" height="0.05" depth="4.5" color="#575b66"></a-box>
+      <!-- Road dashed stripes -->
+      <a-box position="-8 0.00 -9.5" width="2.2" height="0.02" depth="0.22" color="#fff5cc"></a-box>
+      <a-box position="-3 0.00 -9.5" width="2.2" height="0.02" depth="0.22" color="#fff5cc"></a-box>
+      <a-box position="2 0.00 -9.5" width="2.2" height="0.02" depth="0.22" color="#fff5cc"></a-box>
+      <a-box position="7 0.00 -9.5" width="2.2" height="0.02" depth="0.22" color="#fff5cc"></a-box>
+
+      <!-- Cartoon Sun & Fluffy Clouds -->
+      <a-sphere position="-9 11 -24" radius="2.2" color="#ffd54f" material="shader: flat"></a-sphere>
+      <a-entity position="-6 7 -18" cloud-floater="speed: 0.25">
+        <a-sphere position="0 0 0" radius="1.1" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="0.9 0.2 0" radius="0.9" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="-0.9 -0.1 0" radius="0.8" color="#ffffff" material="shader: flat"></a-sphere>
+      </a-entity>
+      <a-entity position="7 8 -20" cloud-floater="speed: 0.18">
+        <a-sphere position="0 0 0" radius="1.3" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="1.1 0.1 0" radius="0.95" color="#ffffff" material="shader: flat"></a-sphere>
+        <a-sphere position="-1.0 0.0 0" radius="0.85" color="#ffffff" material="shader: flat"></a-sphere>
+      </a-entity>
+
+      <!-- Stylized Cartoon Trees & Houses across the street -->
+      <a-entity position="-5.5 0 -13.5">
+        <a-cylinder radius="0.28" height="1.8" position="0 0.9 0" color="#8d5524"></a-cylinder>
+        <a-dodecahedron radius="1.35" position="0 2.4 0" color="#56ab2f"></a-dodecahedron>
+        <a-dodecahedron radius="0.95" position="0.7 2.0 0.4" color="#68c13b"></a-dodecahedron>
+      </a-entity>
+      <a-entity position="5.8 0 -13.8">
+        <a-cylinder radius="0.3" height="2.0" position="0 1.0 0" color="#8d5524"></a-cylinder>
+        <a-dodecahedron radius="1.5" position="0 2.6 0" color="#4ea128"></a-dodecahedron>
+      </a-entity>
+      <a-entity position="0 0 -15.5">
+        <a-box position="0 1.5 0" width="4.2" height="3.0" depth="3.2" color="#f7d08a"></a-box>
+        <a-cone position="0 3.7 0" radius-bottom="3.2" radius-top="0.1" height="1.6" rotation="0 45 0" color="#d9534f"></a-cone>
+        <a-box position="-0.9 1.6 1.62" width="0.8" height="0.8" depth="0.08" color="#a5d8ff"></a-box>
+        <a-box position="0.9 1.6 1.62" width="0.8" height="0.8" depth="0.08" color="#a5d8ff"></a-box>
+      </a-entity>
+
+      <!-- Animated Passing Cartoon Cars -->
+      <a-entity id="passing-car-1" position="-14 0.35 -8.8" passing-car="speed: 4.2; dir: 1; color: #e74c3c">
+        <a-box width="1.9" height="0.55" depth="0.95" color="#e74c3c"></a-box>
+        <a-box position="-0.1 0.45 0" width="1.05" height="0.45" depth="0.85" color="#ff7675"></a-box>
+        <a-cylinder position="-0.55 -0.22 0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.55 -0.22 0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="-0.55 -0.22 -0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.55 -0.22 -0.48" rotation="90 0 0" radius="0.22" height="0.14" color="#2d3436"></a-cylinder>
+      </a-entity>
+      <a-entity id="passing-car-2" position="14 0.35 -10.2" passing-car="speed: 3.5; dir: -1; color: #f1c40f">
+        <a-box width="2.1" height="0.6" depth="1.0" color="#f39c12"></a-box>
+        <a-box position="0.15 0.48 0" width="1.15" height="0.48" depth="0.88" color="#ffeaa7"></a-box>
+        <a-cylinder position="-0.6 -0.24 0.5" rotation="90 0 0" radius="0.23" height="0.14" color="#2d3436"></a-cylinder>
+        <a-cylinder position="0.6 -0.24 0.5" rotation="90 0 0" radius="0.23" height="0.14" color="#2d3436"></a-cylinder>
+      </a-entity>
+    </a-entity>
+
+    <!-- ========================================================= -->
+    <!-- COZY-CHAOTIC CARTOON DINER ARCHITECTURE                   -->
+    <!-- ========================================================= -->
+    <a-entity id="diner-room">
+      <!-- Checkered Diner Floor -->
+      <a-plane rotation="-90 0 0" width="5.2" height="4.8" position="0 0 -0.2"
+               material="src: #tex-checkers; repeat: 6 6; roughness: 0.7"></a-plane>
+
+      <!-- Ceiling with Wooden Beams & Hanging Warm Lamps -->
+      <a-plane rotation="90 0 0" width="5.2" height="4.8" position="0 3.1 -0.2" color="#f5e6cc"></a-plane>
+      <a-box position="0 3.02 -1.2" width="5.2" height="0.16" depth="0.22" color="#7c4d2b"></a-box>
+      <a-box position="0 3.02 0.8" width="5.2" height="0.16" depth="0.22" color="#7c4d2b"></a-box>
+      <!-- Hanging Lamp 1 -->
+      <a-entity position="-0.85 2.55 -0.45">
+        <a-cylinder radius="0.015" height="0.9" position="0 0.45 0" color="#3d2b1f"></a-cylinder>
+        <a-cone radius-bottom="0.24" radius-top="0.06" height="0.18" color="#d9534f"></a-cone>
+        <a-sphere radius="0.07" position="0 -0.07 0" color="#fff3b0" material="shader: flat"></a-sphere>
+      </a-entity>
+      <!-- Hanging Lamp 2 -->
+      <a-entity position="0.85 2.55 -0.45">
+        <a-cylinder radius="0.015" height="0.9" position="0 0.45 0" color="#3d2b1f"></a-cylinder>
+        <a-cone radius-bottom="0.24" radius-top="0.06" height="0.18" color="#e67e22"></a-cone>
+        <a-sphere radius="0.07" position="0 -0.07 0" color="#fff3b0" material="shader: flat"></a-sphere>
+      </a-entity>
+
+      <!-- Back Wall (Behind Player) with Refrigerator & Pantry Shelves -->
+      <a-box position="0 1.55 2.15" width="5.2" height="3.1" depth="0.15"
+             material="src: #tex-tiles; repeat: 8 5"></a-box>
+      <!-- Cartoon Retro Fridge -->
+      <a-entity position="1.55 1.05 1.72">
+        <a-box width="0.95" height="2.05" depth="0.72" color="#74b9ff"></a-box>
+        <a-box position="0 0.35 0.37" width="0.88" height="1.15" depth="0.04" color="#a3d2ff"></a-box>
+        <a-box position="0 -0.62 0.37" width="0.88" height="0.68" depth="0.04" color="#a3d2ff"></a-box>
+        <a-box position="-0.34 0.35 0.42" width="0.04" height="0.35" depth="0.06" color="#dfe6e9"></a-box>
+        <a-box position="-0.34 -0.55 0.42" width="0.04" height="0.25" depth="0.06" color="#dfe6e9"></a-box>
+      </a-entity>
+      <!-- Potted Plant in corner -->
+      <a-entity position="-1.95 0 1.65">
+        <a-cylinder radius-bottom="0.2" radius-top="0.26" height="0.42" position="0 0.21 0" color="#c05621"></a-cylinder>
+        <a-dodecahedron radius="0.32" position="0 0.58 0" color="#38a169"></a-dodecahedron>
+        <a-dodecahedron radius="0.22" position="0.16 0.72 0.08" color="#48bb78"></a-dodecahedron>
+      </a-entity>
+
+      <!-- Left Wall (Ingredient Crates Wall + Recipe Poster) -->
+      <a-box position="-2.55 1.55 -0.2" width="0.15" height="3.1" depth="4.8"
+             material="src: #tex-tiles; repeat: 8 5"></a-box>
+
+      <!-- Right Wall (Stove & Blender Wall + Window) -->
+      <a-box position="2.55 1.55 -0.2" width="0.15" height="3.1" depth="4.8"
+             material="src: #tex-tiles; repeat: 8 5"></a-box>
+
+      <!-- Front Service Wall with Large Service Window overlooking the street -->
+      <!-- Lower front wall -->
+      <a-box position="0 0.45 -1.65" width="5.2" height="0.9" depth="0.25" color="#d9822b"></a-box>
+      <!-- Left & Right window pillars -->
+      <a-box position="-2.05 1.95 -1.65" width="1.1" height="2.2" depth="0.25"
+             material="src: #tex-tiles; repeat: 2 4"></a-box>
+      <a-box position="2.05 1.95 -1.65" width="1.1" height="2.2" depth="0.25"
+             material="src: #tex-tiles; repeat: 2 4"></a-box>
+      <!-- Top header beam above service window -->
+      <a-box position="0 2.75 -1.65" width="3.2" height="0.7" depth="0.28" color="#8c4a1c"></a-box>
+
+      <!-- Cafe Signboard above window -->
+      <a-plane position="0 2.75 -1.50" width="2.8" height="0.52"
+               material="src: #tex-menu-sign; shader: flat"></a-plane>
+    </a-entity>
+
+    <!-- ========================================================= -->
+    <!-- U-SHAPED WORK COUNTERS & TACTILE KITCHEN STATIONS         -->
+    <!-- ========================================================= -->
+    <a-entity id="kitchen-counters">
+      <!-- 1. FRONT SERVICE COUNTER (Serving zone + Cash Register + Order Screen) -->
+      <a-box position="0 0.44 -1.25" width="3.6" height="0.88" depth="0.75"
+             material="src: #tex-wood; repeat: 3 1"></a-box>
+      <a-box position="0 0.90 -1.25" width="3.7" height="0.06" depth="0.82" color="#f7ead7"></a-box>
+
+      <!-- Serving Plate / Tray Zone (Drop food & drinks here for the customer!) -->
+      <a-entity id="serve-zone" position="-0.35 0.94 -1.25">
+        <a-cylinder radius="0.34" height="0.03" color="#ffffff"></a-cylinder>
+        <a-ring rotation="-90 0 0" position="0 0.018 0" radius-inner="0.26" radius-outer="0.31" color="#e67e22"></a-ring>
+        <a-text value="ПОДАЧА" align="center" position="0 0.02 0.22" rotation="-90 0 0" width="1.4" color="#b3541e"></a-text>
+      </a-entity>
+
+      <!-- Diegetic 3D Order Board hanging above Front Counter -->
+      <a-entity position="-0.35 2.08 -1.52">
+        <a-box width="1.55" height="0.78" depth="0.06" color="#4a2e16"></a-box>
+        <a-plane id="order-board-screen" position="0 0 0.035" width="1.46" height="0.70"
+                 material="src: #tex-order-board; shader: flat"></a-plane>
+      </a-entity>
+
+      <!-- Diegetic 3D Cash Register (Right side of Front Counter) -->
+      <a-entity id="cash-register" position="0.88 0.93 -1.22" rotation="0 -18 0">
+        <a-box position="0 0.12 0" width="0.46" height="0.24" depth="0.42" color="#d4af37"></a-box>
+        <a-box position="0 0.30 -0.05" width="0.42" height="0.22" depth="0.28" color="#b8860b"></a-box>
+        <!-- Digital/Mechanical Cash Display -->
+        <a-plane id="register-display" position="0 0.44 -0.02" width="0.36" height="0.16"
+                 material="src: #tex-register-screen; shader: flat"></a-plane>
+        <!-- Tactile Register Buttons -->
+        <a-box position="-0.1 0.25 0.14" width="0.07" height="0.04" depth="0.07" color="#e74c3c"></a-box>
+        <a-box position="0 0.25 0.14" width="0.07" height="0.04" depth="0.07" color="#2ecc71"></a-box>
+        <a-box position="0.1 0.25 0.14" width="0.07" height="0.04" depth="0.07" color="#3498db"></a-box>
+        <!-- Spawn point for physical cash bills -->
+        <a-entity id="cash-spawn-point" position="-0.35 0.05 0.12"></a-entity>
+      </a-entity>
+
+      <!-- Diegetic Physical Shift Reset / Bell Button on Front Counter -->
+      <a-entity id="service-bell" position="-1.15 0.94 -1.15" class="interactable-button" bell-button>
+        <a-cylinder radius="0.09" height="0.03" color="#5d4037"></a-cylinder>
+        <a-sphere id="bell-dome" position="0 0.035 0" radius="0.07" theta-length="90" color="#f1c40f"></a-sphere>
+        <a-cylinder position="0 0.08 0" radius="0.015" height="0.03" color="#e74c3c"></a-cylinder>
+        <a-text value="ЗВОНОК / НОВЫЙ ГОСТЬ" align="center" position="0 0.15 0" width="1.2" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- 2. LEFT COUNTER: INGREDIENT CRATES & CUTTING BOARD STATION -->
+      <a-box position="-1.45 0.44 -0.15" width="0.82" height="0.88" depth="2.3"
+             material="src: #tex-wood; repeat: 2 2"></a-box>
+      <a-box position="-1.45 0.90 -0.15" width="0.88" height="0.06" depth="2.36" color="#f7ead7"></a-box>
+
+      <!-- Wall Recipe & Mutation Chart (Russian, Diegetic in-world poster) -->
+      <a-entity position="-2.45 1.72 -0.15" rotation="0 90 0">
+        <a-box width="2.1" height="1.45" depth="0.05" color="#6d4c41"></a-box>
+        <a-plane position="0 0 0.03" width="1.98" height="1.34"
+                 material="src: #tex-poster-recipes; shader: flat"></a-plane>
+      </a-entity>
+
+      <!-- Cutting Board & Kitchen Knife (Center of Left Counter) -->
+      <a-entity id="cutting-station" position="-1.32 0.94 -0.25">
+        <a-box width="0.46" height="0.03" depth="0.62" color="#deb887"></a-box>
+        <a-box position="0 0.018 0" width="0.40" height="0.005" depth="0.54" color="#f5deb3"></a-box>
+      </a-entity>
+
+      <!-- Grabbable Kitchen Knife -->
+      <a-entity id="kitchen-knife" position="-1.22 0.98 0.16" rotation="0 25 0"
+                grabbable="type: knife; name: Нож" knife-cutter>
+        <!-- Handle -->
+        <a-box position="0 0.02 0.08" width="0.03" height="0.03" depth="0.13" color="#5d4037"></a-box>
+        <!-- Steel Blade -->
+        <a-box position="0 0.022 -0.07" width="0.008" height="0.042" depth="0.18" color="#cfd8dc"></a-box>
+      </a-entity>
+
+      <!-- Ingredient Spawner Crates (Infinite supply when grabbed!) -->
+      <!-- Crate 1: Raw Bacon -->
+      <a-entity position="-1.58 1.02 -0.95" ingredient-crate="itemType: bacon; label: БЕКОН">
+        <a-box width="0.34" height="0.16" depth="0.34" color="#a1662f"></a-box>
+        <!-- Visual preview strips inside crate -->
+        <a-box position="-0.04 0.08 0" width="0.08" height="0.02" depth="0.22" color="#e57373"></a-box>
+        <a-box position="0.05 0.09 0.02" rotation="0 15 0" width="0.08" height="0.02" depth="0.22" color="#ef9a9a"></a-box>
+        <a-text value="БЕКОН" align="center" position="0 0.18 0" rotation="0 90 0" width="1.3" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 2: Sausages -->
+      <a-entity position="-1.58 1.02 -0.56" ingredient-crate="itemType: sausage; label: СОСИСКИ">
+        <a-box width="0.34" height="0.16" depth="0.34" color="#a1662f"></a-box>
+        <a-cylinder position="-0.05 0.08 0" rotation="90 10 0" radius="0.03" height="0.22" color="#d96b6b"></a-cylinder>
+        <a-cylinder position="0.05 0.08 -0.02" rotation="90 -15 0" radius="0.03" height="0.22" color="#e07a7a"></a-cylinder>
+        <a-text value="СОСИСКИ" align="center" position="0 0.18 0" rotation="0 90 0" width="1.3" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 3: Cucumbers -->
+      <a-entity position="-1.58 1.02 0.48" ingredient-crate="itemType: cucumber; label: ОГУРЦЫ">
+        <a-box width="0.34" height="0.16" depth="0.34" color="#a1662f"></a-box>
+        <a-cylinder position="0 0.09 0" rotation="90 25 0" radius="0.038" height="0.24" color="#2e7d32"></a-cylinder>
+        <a-text value="ОГУРЦЫ" align="center" position="0 0.18 0" rotation="0 90 0" width="1.3" color="#1b5e20"></a-text>
+      </a-entity>
+
+      <!-- Crate 4: Watermelons -->
+      <a-entity position="-1.58 1.02 0.86" ingredient-crate="itemType: watermelon; label: АРБУЗЫ">
+        <a-box width="0.34" height="0.16" depth="0.34" color="#a1662f"></a-box>
+        <a-sphere position="0 0.11 0" radius="0.11" color="#388e3c"></a-sphere>
+        <a-text value="АРБУЗЫ" align="center" position="0 0.25 0" rotation="0 90 0" width="1.3" color="#1b5e20"></a-text>
+      </a-entity>
+
+      <!-- Shelf above Left Counter for Pumpkins & Weird Items (Old Boot & Rubber Duck) -->
+      <a-box position="-2.22 1.15 -0.15" width="0.45" height="0.05" depth="2.1" color="#8d5524"></a-box>
+      <!-- Crate 5: Pumpkins -->
+      <a-entity position="-2.22 1.25 -0.75" ingredient-crate="itemType: pumpkin; label: ТЫКВЫ">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#a1662f"></a-box>
+        <a-sphere position="0 0.11 0" radius="0.10" scale="1.15 0.9 1.15" color="#f57c00"></a-sphere>
+        <a-text value="ТЫКВЫ" align="center" position="0 0.25 0" rotation="0 90 0" width="1.3" color="#e65100"></a-text>
+      </a-entity>
+
+      <!-- Crate 6: Old Boots (For Fear Potion & Gross Pranks!) -->
+      <a-entity position="-2.22 1.25 -0.15" ingredient-crate="itemType: boot; label: СТАРЫЙ БОТИНОК">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#6d4c41"></a-box>
+        <a-box position="0 0.10 0.02" width="0.09" height="0.08" depth="0.18" color="#4e342e"></a-box>
+        <a-box position="0 0.15 -0.03" width="0.09" height="0.10" depth="0.09" color="#5d4037"></a-box>
+        <a-text value="БОТИНОК" align="center" position="0 0.25 0" rotation="0 90 0" width="1.3" color="#3e2723"></a-text>
+      </a-entity>
+
+      <!-- Crate 7: Rubber Ducks -->
+      <a-entity position="-2.22 1.25 0.45" ingredient-crate="itemType: duck; label: УТОЧКА">
+        <a-box width="0.34" height="0.15" depth="0.34" color="#a1662f"></a-box>
+        <a-sphere position="0 0.10 0" radius="0.07" color="#fdd835"></a-sphere>
+        <a-sphere position="0 0.16 0.04" radius="0.045" color="#fdd835"></a-sphere>
+        <a-cone position="0 0.16 0.09" rotation="90 0 0" radius-bottom="0.02" height="0.04" color="#fb8c00"></a-cone>
+        <a-text value="УТОЧКА" align="center" position="0 0.25 0" rotation="0 90 0" width="1.3" color="#f57f17"></a-text>
+      </a-entity>
+
+      <!-- 3. RIGHT COUNTER: SIZZLING STOVE & MUTATION BLENDER -->
+      <a-box position="1.45 0.44 -0.15" width="0.82" height="0.88" depth="2.3"
+             material="src: #tex-wood; repeat: 2 2"></a-box>
+      <a-box position="1.45 0.90 -0.15" width="0.88" height="0.06" depth="2.36" color="#f7ead7"></a-box>
+
+      <!-- Sizzling Stove & Frying Pan (Front-right side) -->
+      <a-entity id="stove-unit" position="1.42 0.94 -0.58" stove-cooker>
+        <!-- Stove Body -->
+        <a-box width="0.68" height="0.10" depth="0.72" color="#eceff1"></a-box>
+        <!-- Two Hot Burners -->
+        <a-cylinder position="0 0.055 -0.16" radius="0.14" height="0.015" color="#d84315"></a-cylinder>
+        <a-cylinder position="0 0.055 0.18" radius="0.14" height="0.015" color="#d84315"></a-cylinder>
+        <!-- Frying Pan 1 -->
+        <a-cylinder position="0 0.08 -0.16" radius="0.18" height="0.035" color="#37474f"></a-cylinder>
+        <a-box position="-0.25 0.09 -0.16" width="0.22" height="0.025" depth="0.035" color="#263238"></a-box>
+        <!-- Frying Pan 2 -->
+        <a-cylinder position="0 0.08 0.18" radius="0.18" height="0.035" color="#37474f"></a-cylinder>
+        <a-box position="-0.25 0.09 0.18" width="0.22" height="0.025" depth="0.035" color="#263238"></a-box>
+        <a-text value="ПЛИТА (ЖАРКА)" align="center" position="-0.32 0.18 0" rotation="0 -90 0" width="1.4" color="#bf360c"></a-text>
+      </a-entity>
+
+      <!-- Tactile Blender / Potion Cauldron Mixer (Back-right side) -->
+      <a-entity id="blender-unit" position="1.42 0.94 0.35" potion-blender>
+        <!-- Blender Base -->
+        <a-cylinder radius="0.16" height="0.18" position="0 0.09 0" color="#e53935"></a-cylinder>
+        <!-- Clear Pitcher / Jar -->
+        <a-cylinder id="blender-jar" radius="0.14" height="0.34" position="0 0.35 0"
+                    material="color: #e0f7fa; opacity: 0.45; transparent: true"></a-cylinder>
+        <!-- Liquid Level inside Blender -->
+        <a-cylinder id="blender-liquid" radius="0.125" height="0.02" position="0 0.21 0"
+                    color="#ff7043" visible="false"></a-cylinder>
+        <!-- Physical Big Green Blend Lever/Button -->
+        <a-entity id="blend-trigger-btn" position="-0.18 0.12 0" class="interactable-button">
+          <a-box width="0.08" height="0.09" depth="0.12" color="#43a047"></a-box>
+          <a-text value="СМЕШАТЬ!" align="center" position="-0.05 0.08 0" rotation="0 -90 0" width="1.2" color="#1b5e20"></a-text>
+        </a-entity>
+        <!-- Spawn spot for finished Drink / Potion Bottle -->
+        <a-entity id="drink-spawn-spot" position="-0.25 0.02 0.32"></a-entity>
+      </a-entity>
+
+      <!-- Trash Can (Next to right counter) -->
+      <a-entity id="trash-bin" position="1.15 0 0.98" trash-disposal>
+        <a-cylinder radius-bottom="0.18" radius-top="0.22" height="0.52" position="0 0.26 0" color="#607d8b"></a-cylinder>
+        <a-cylinder radius="0.19" height="0.02" position="0 0.51 0" color="#263238"></a-cylinder>
+        <a-text value="МУСОР" align="center" position="0 0.58 0" rotation="0 -90 0" width="1.3" color="#37474f"></a-text>
+      </a-entity>
+    </a-entity>
+
+    <!-- ========================================================= -->
+    <!-- DYNAMIC ENTITIES CONTAINER (Food, Drinks, Cash, Guests)   -->
+    <!-- ========================================================= -->
+    <a-entity id="dynamic-items"></a-entity>
+    <a-entity id="customer-anchor" position="-0.35 0 -2.15"></a-entity>
+
+  </a-scene>
+
+  <script>
+    /**
+     * =========================================================================
+     * PROCEDURAL WEB AUDIO ENGINE (Zero external audio files, Quest compatible)
+     * =========================================================================
+     */
+    class CafeAudio {
+      constructor() {
+        this.ctx = null;
+        this.sizzleTimer = 0;
+      }
+
+      unlock() {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playTone(freq, type = 'sine', duration = 0.15, vol = 0.18, slideTo = null) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        if (slideTo) {
+          osc.frequency.exponentialRampToValueAtTime(slideTo, now + duration);
+        }
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + duration);
+      }
+
+      playNoise(duration = 0.15, vol = 0.12, filterFreq = 1200) {
+        if (!this.ctx) return;
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = filterFreq;
+
+        const gain = this.ctx.createGain();
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(vol, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+      }
+
+      playPop() {
+        this.playTone(320, 'sine', 0.09, 0.18, 640);
+      }
+
+      playChop() {
+        this.playNoise(0.08, 0.25, 900);
+        this.playTone(180, 'triangle', 0.07, 0.2, 80);
+      }
+
+      playSizzle() {
+        this.playNoise(0.22, 0.07, 3200);
+      }
+
+      playBlender() {
+        this.playTone(140, 'sawtooth', 0.75, 0.16, 420);
+        this.playNoise(0.75, 0.12, 1600);
+      }
+
+      playCash() {
+        this.playTone(987, 'sine', 0.12, 0.22);
+        setTimeout(() => this.playTone(1318, 'sine', 0.28, 0.25), 90);
+      }
+
+      playBell() {
+        this.playTone(1560, 'sine', 0.45, 0.22);
+      }
+
+      playMutation() {
+        this.playTone(220, 'sawtooth', 0.5, 0.22, 780);
+        setTimeout(() => this.playTone(620, 'square', 0.35, 0.16, 190), 180);
+      }
+
+      playRobberScream() {
+        this.playTone(540, 'sawtooth', 0.65, 0.28, 1180);
+        setTimeout(() => this.playTone(920, 'sawtooth', 0.55, 0.24, 340), 220);
+      }
+
+      playMumble(pitch = 220) {
+        for (let i = 0; i < 3; i++) {
+          setTimeout(() => {
+            this.playTone(pitch + Math.random() * 90, 'triangle', 0.09, 0.14);
+          }, i * 100);
+        }
+      }
+    }
+
+    const SFX = new CafeAudio();
+
+    /**
+     * =========================================================================
+     * PROCEDURAL CARTOON CANVAS TEXTURES (Diegetic Posters, Screens, Tiles)
+     * =========================================================================
+     */
+    function generateTextures() {
+      // 1. Checkered Diner Floor Texture
+      const chk = document.getElementById('tex-checkers');
+      const cCtx = chk.getContext('2d');
+      cCtx.fillStyle = '#fff8eb';
+      cCtx.fillRect(0, 0, 512, 512);
+      cCtx.fillStyle = '#3d312a';
+      cCtx.fillRect(0, 0, 256, 256);
+      cCtx.fillRect(256, 256, 256, 256);
+
+      // 2. Warm Kitchen Tile Texture
+      const til = document.getElementById('tex-tiles');
+      const tCtx = til.getContext('2d');
+      tCtx.fillStyle = '#f5ead6';
+      tCtx.fillRect(0, 0, 512, 512);
+      tCtx.strokeStyle = '#d4c2a3';
+      tCtx.lineWidth = 6;
+      for (let x = 0; x <= 512; x += 128) {
+        tCtx.beginPath(); tCtx.moveTo(x, 0); tCtx.lineTo(x, 512); tCtx.stroke();
+      }
+      for (let y = 0; y <= 512; y += 128) {
+        tCtx.beginPath(); tCtx.moveTo(0, y); tCtx.lineTo(512, y); tCtx.stroke();
+      }
+
+      // 3. Warm Wood Texture
+      const wd = document.getElementById('tex-wood');
+      const wCtx = wd.getContext('2d');
+      wCtx.fillStyle = '#b87333';
+      wCtx.fillRect(0, 0, 512, 512);
+      wCtx.fillStyle = '#9e5e24';
+      for (let y = 0; y < 512; y += 64) {
+        wCtx.fillRect(0, y, 512, 6);
+      }
+
+      // 4. Cafe Top Banner Sign
+      const sgn = document.getElementById('tex-menu-sign');
+      const sCtx = sgn.getContext('2d');
+      sCtx.fillStyle = '#5c2c0c';
+      sCtx.fillRect(0, 0, 1024, 256);
+      sCtx.strokeStyle = '#f6ad55';
+      sCtx.lineWidth = 14;
+      sCtx.strokeRect(12, 12, 1000, 232);
+      sCtx.fillStyle = '#fff5d6';
+      sCtx.font = 'bold 74px sans-serif';
+      sCtx.textAlign = 'center';
+      sCtx.fillText('КАФЕ «БЕКОН И ЗЕЛЬЯ»', 512, 148);
+
+      // 5. Diegetic Mutation & Potion Recipe Poster (Russian)
+      const pst = document.getElementById('tex-poster-recipes');
+      const pCtx = pst.getContext('2d');
+      pCtx.fillStyle = '#fffdf7';
+      pCtx.fillRect(0, 0, 1024, 768);
+      pCtx.strokeStyle = '#d97706';
+      pCtx.lineWidth = 16;
+      pCtx.strokeRect(16, 16, 992, 736);
+
+      pCtx.fillStyle = '#78350f';
+      pCtx.font = 'bold 48px sans-serif';
+      pCtx.textAlign = 'center';
+      pCtx.fillText('ШПАРГАЛКА ПОВАРА И АЛХИМИКА', 512, 82);
+
+      pCtx.textAlign = 'left';
+      pCtx.font = 'bold 34px sans-serif';
+      pCtx.fillStyle = '#b45309';
+      pCtx.fillText('1. ГОТОВКА И НАРЕЗКА:', 52, 150);
+      pCtx.font = '28px sans-serif';
+      pCtx.fillStyle = '#292524';
+      pCtx.fillText('• Бекон / Сосиски клади на ПЛИТУ (справа) до румяности!', 60, 195);
+      pCtx.fillText('• Арбуз, Тыкву, Огурец и Сосиски режь НОЖОМ на доске!', 60, 238);
+
+      pCtx.font = 'bold 34px sans-serif';
+      pCtx.fillStyle = '#b45309';
+      pCtx.fillText('2. БЛЕНДЕР И МУТАЦИИ ПОКУПАТЕЛЕЙ:', 52, 310);
+      pCtx.font = '28px sans-serif';
+      pCtx.fillStyle = '#292524';
+      pCtx.fillText('• Бекон + Сосиска = Коктейль «Руки-Ниточки» (кости!)', 60, 358);
+      pCtx.fillText('• Арбуз + Тыква = Зелье «Гигантская Тыквоголова»', 60, 403);
+      pCtx.fillText('• Огурец + Любое = Зелье «Зелёный Великан»', 60, 448);
+
+      // Highlighted Fear Potion Box for Robber Defense
+      pCtx.fillStyle = '#fee2e2';
+      pCtx.fillRect(48, 495, 928, 195);
+      pCtx.strokeStyle = '#dc2626';
+      pCtx.lineWidth = 6;
+      pCtx.strokeRect(48, 495, 928, 195);
+
+      pCtx.fillStyle = '#b91c1c';
+      pCtx.font = 'bold 36px sans-serif';
+      pCtx.fillText('3. ЗАЩИТА ОТ ГРАБИТЕЛЯ — ЗЕЛЬЕ СТРАХА:', 72, 550);
+      pCtx.fillStyle = '#1f2937';
+      pCtx.font = 'bold 30px sans-serif';
+      pCtx.fillText('• Брось в блендер: ТЫКВА + БОТИНОК (или УТОЧКА)', 72, 602);
+      pCtx.fillText('• Нажми «СМЕШАТЬ!» и КИНЬ бутылку в ГРАБИТЕЛЯ!', 72, 650);
+    }
+
+    function updateOrderBoardCanvas(title, foodText, drinkText, isRobber = false) {
+      const cvs = document.getElementById('tex-order-board');
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = isRobber ? '#7f1d1d' : '#1e293b';
+      ctx.fillRect(0, 0, 1024, 512);
+      ctx.strokeStyle = isRobber ? '#f87171' : '#f59e0b';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(14, 14, 996, 484);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = isRobber ? '#fecaca' : '#fbbf24';
+      ctx.font = 'bold 52px sans-serif';
+      ctx.fillText(title, 512, 95);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText(foodText, 512, 235);
+
+      ctx.fillStyle = isRobber ? '#fde047' : '#7dd3fc';
+      ctx.font = 'bold 42px sans-serif';
+      ctx.fillText(drinkText, 512, 355);
+
+      const screen = document.getElementById('order-board-screen');
+      if (screen && screen.getObject3D('mesh')) {
+        const tex = screen.getObject3D('mesh').material.map;
+        if (tex) tex.needsUpdate = true;
+      }
+    }
+
+    function updateRegisterCanvas(cash) {
+      const cvs = document.getElementById('tex-register-screen');
+      const ctx = cvs.getContext('2d');
+      ctx.fillStyle = '#064e3b';
+      ctx.fillRect(0, 0, 512, 256);
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 10;
+      ctx.strokeRect(8, 8, 496, 240);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#a7f3d0';
+      ctx.font = 'bold 34px sans-serif';
+      ctx.fillText('КАССА КАФЕ', 256, 68);
+
+      ctx.fillStyle = '#fde047';
+      ctx.font = 'bold 88px monospace';
+      ctx.fillText(`$${cash}`, 256, 185);
+
+      const disp = document.getElementById('register-display');
+      if (disp && disp.getObject3D('mesh')) {
+        const tex = disp.getObject3D('mesh').material.map;
+        if (tex) tex.needsUpdate = true;
+      }
+    }
+
+    /**
+     * =========================================================================
+     * ITEM FACTORY (Creates tactile low-poly foods, slices, drinks & cash)
+     * =========================================================================
+     */
+    const ITEM_DEFS = {
+      bacon: { name: 'Бекон', rawColor: '#e57373', cookedColor: '#8d3b24', burntColor: '#261c1a', cookable: true, sliceable: false },
+      sausage: { name: 'Сосиска', rawColor: '#e07a7a', cookedColor: '#9c3d22', burntColor: '#211816', cookable: true, sliceable: true },
+      sausage_slice: { name: 'Ломтик сосиски', rawColor: '#e07a7a', cookedColor: '#9c3d22', burntColor: '#211816', cookable: true, sliceable: false },
+      cucumber: { name: 'Огурец', rawColor: '#2e7d32', cookedColor: '#556b2f', burntColor: '#1f2418', cookable: true, sliceable: true },
+      cucumber_slice: { name: 'Долька огурца', rawColor: '#81c784', cookedColor: '#689f38', burntColor: '#263218', cookable: true, sliceable: false },
+      watermelon: { name: 'Арбуз', rawColor: '#388e3c', cookedColor: '#4e5d30', burntColor: '#1b1f16', cookable: false, sliceable: true },
+      watermelon_slice: { name: 'Долька арбуза', rawColor: '#ef5350', cookedColor: '#ad3a38', burntColor: '#291717', cookable: false, sliceable: false },
+      pumpkin: { name: 'Тыква', rawColor: '#f57c00', cookedColor: '#bf5b04', burntColor: '#2b1b0e', cookable: false, sliceable: true },
+      pumpkin_slice: { name: 'Кусок тыквы', rawColor: '#fb8c00', cookedColor: '#c66900', burntColor: '#2e1d0d', cookable: false, sliceable: false },
+      boot: { name: 'Старый ботинок', rawColor: '#4e342e', cookedColor: '#3e2723', burntColor: '#1c1210', cookable: true, sliceable: false },
+      duck: { name: 'Резиновая уточка', rawColor: '#fdd835', cookedColor: '#f9a825', burntColor: '#33290a', cookable: true, sliceable: false }
+    };
+
+    function spawnKitchenItem(type, pos, cookState = 'raw') {
+      const container = document.getElementById('dynamic-items');
+      const el = document.createElement('a-entity');
+      const def = ITEM_DEFS[type] || ITEM_DEFS.bacon;
+
+      el.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      el.setAttribute('grabbable', `type: ${type}; name: ${def.name}`);
+      el.dataset.itemType = type;
+      el.dataset.cookState = cookState; // 'raw' | 'cooked' | 'burnt'
+      el.dataset.cookProgress = cookState === 'cooked' ? '1.0' : '0';
+
+      const color = cookState === 'cooked' ? def.cookedColor : (cookState === 'burnt' ? def.burntColor : def.rawColor);
+
+      if (type === 'bacon') {
+        const strip = document.createElement('a-box');
+        strip.setAttribute('width', '0.07');
+        strip.setAttribute('height', '0.014');
+        strip.setAttribute('depth', '0.22');
+        strip.setAttribute('color', color);
+        strip.classList.add('food-mesh');
+        // Fat stripe detail
+        const fat = document.createElement('a-box');
+        fat.setAttribute('width', '0.02');
+        fat.setAttribute('height', '0.016');
+        fat.setAttribute('depth', '0.21');
+        fat.setAttribute('color', '#ffcdd2');
+        el.appendChild(strip);
+        el.appendChild(fat);
+      } else if (type === 'sausage') {
+        const cyl = document.createElement('a-cylinder');
+        cyl.setAttribute('radius', '0.028');
+        cyl.setAttribute('height', '0.20');
+        cyl.setAttribute('rotation', '90 0 0');
+        cyl.setAttribute('color', color);
+        cyl.classList.add('food-mesh');
+        el.appendChild(cyl);
+      } else if (type === 'sausage_slice') {
+        const disc = document.createElement('a-cylinder');
+        disc.setAttribute('radius', '0.032');
+        disc.setAttribute('height', '0.024');
+        disc.setAttribute('color', color);
+        disc.classList.add('food-mesh');
+        el.appendChild(disc);
+      } else if (type === 'cucumber') {
+        const cyl = document.createElement('a-cylinder');
+        cyl.setAttribute('radius', '0.034');
+        cyl.setAttribute('height', '0.22');
+        cyl.setAttribute('rotation', '90 0 0');
+        cyl.setAttribute('color', color);
+        cyl.classList.add('food-mesh');
+        el.appendChild(cyl);
+      } else if (type === 'cucumber_slice') {
+        const disc = document.createElement('a-cylinder');
+        disc.setAttribute('radius', '0.038');
+        disc.setAttribute('height', '0.02');
+        disc.setAttribute('color', color);
+        disc.classList.add('food-mesh');
+        el.appendChild(disc);
+      } else if (type === 'watermelon') {
+        const sph = document.createElement('a-sphere');
+        sph.setAttribute('radius', '0.11');
+        sph.setAttribute('color', color);
+        sph.classList.add('food-mesh');
+        el.appendChild(sph);
+      } else if (type === 'watermelon_slice') {
+        const wedge = document.createElement('a-cone');
+        wedge.setAttribute('radius-bottom', '0.09');
+        wedge.setAttribute('radius-top', '0.01');
+        wedge.setAttribute('height', '0.11');
+        wedge.setAttribute('scale', '1 1 0.35');
+        wedge.setAttribute('color', color);
+        wedge.classList.add('food-mesh');
+        el.appendChild(wedge);
+      } else if (type === 'pumpkin') {
+        const sph = document.createElement('a-sphere');
+        sph.setAttribute('radius', '0.10');
+        sph.setAttribute('scale', '1.15 0.9 1.15');
+        sph.setAttribute('color', color);
+        sph.classList.add('food-mesh');
+        const stem = document.createElement('a-cylinder');
+        stem.setAttribute('radius', '0.018');
+        stem.setAttribute('height', '0.04');
+        stem.setAttribute('position', '0 0.09 0');
+        stem.setAttribute('color', '#33691e');
+        el.appendChild(sph);
+        el.appendChild(stem);
+      } else if (type === 'pumpkin_slice') {
+        const chunk = document.createElement('a-box');
+        chunk.setAttribute('width', '0.08');
+        chunk.setAttribute('height', '0.05');
+        chunk.setAttribute('depth', '0.09');
+        chunk.setAttribute('color', color);
+        chunk.classList.add('food-mesh');
+        el.appendChild(chunk);
+      } else if (type === 'boot') {
+        const sole = document.createElement('a-box');
+        sole.setAttribute('width', '0.09');
+        sole.setAttribute('height', '0.08');
+        sole.setAttribute('depth', '0.18');
+        sole.setAttribute('color', color);
+        sole.classList.add('food-mesh');
+        const ankle = document.createElement('a-box');
+        ankle.setAttribute('width', '0.09');
+        ankle.setAttribute('height', '0.10');
+        ankle.setAttribute('depth', '0.09');
+        ankle.setAttribute('position', '0 0.06 -0.04');
+        ankle.setAttribute('color', '#5d4037');
+        el.appendChild(sole);
+        el.appendChild(ankle);
+      } else if (type === 'duck') {
+        const body = document.createElement('a-sphere');
+        body.setAttribute('radius', '0.065');
+        body.setAttribute('color', color);
+        body.classList.add('food-mesh');
+        const head = document.createElement('a-sphere');
+        head.setAttribute('radius', '0.042');
+        head.setAttribute('position', '0 0.06 0.035');
+        head.setAttribute('color', color);
+        const beak = document.createElement('a-cone');
+        beak.setAttribute('radius-bottom', '0.018');
+        beak.setAttribute('height', '0.035');
+        beak.setAttribute('rotation', '90 0 0');
+        beak.setAttribute('position', '0 0.06 0.08');
+        beak.setAttribute('color', '#ff6f00');
+        el.appendChild(body);
+        el.appendChild(head);
+        el.appendChild(beak);
+      }
+
+      container.appendChild(el);
+      return el;
+    }
+
+    function spawnDrinkBottle(potionProfile, pos) {
+      const container = document.getElementById('dynamic-items');
+      const el = document.createElement('a-entity');
+      el.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      el.setAttribute('grabbable', `type: drink; name: ${potionProfile.label}`);
+      el.dataset.itemType = 'drink';
+      el.dataset.potionEffect = potionProfile.effect;
+      el.dataset.potionLabel = potionProfile.label;
+
+      // Stylized cartoon bottle/cup
+      const body = document.createElement('a-cylinder');
+      body.setAttribute('radius', '0.055');
+      body.setAttribute('height', '0.16');
+      body.setAttribute('position', '0 0.08 0');
+      body.setAttribute('color', potionProfile.color);
+
+      const neck = document.createElement('a-cylinder');
+      neck.setAttribute('radius', '0.025');
+      neck.setAttribute('height', '0.05');
+      neck.setAttribute('position', '0 0.18 0');
+      neck.setAttribute('color', '#eceff1');
+
+      const cork = document.createElement('a-cylinder');
+      cork.setAttribute('radius', '0.022');
+      cork.setAttribute('height', '0.025');
+      cork.setAttribute('position', '0 0.21 0');
+      cork.setAttribute('color', '#8d6e63');
+
+      const tag = document.createElement('a-text');
+      tag.setAttribute('value', potionProfile.shortTag);
+      tag.setAttribute('align', 'center');
+      tag.setAttribute('position', '0 0.27 0');
+      tag.setAttribute('width', '1.2');
+      tag.setAttribute('color', '#212121');
+
+      el.appendChild(body);
+      el.appendChild(neck);
+      el.appendChild(cork);
+      el.appendChild(tag);
+      container.appendChild(el);
+      return el;
+    }
+
+    function spawnSmokeParticle(pos, color = '#eeeeee') {
+      const container = document.getElementById('dynamic-items');
+      const p = document.createElement('a-sphere');
+      p.setAttribute('position', `${pos.x + (Math.random()-0.5)*0.08} ${pos.y + 0.04} ${pos.z + (Math.random()-0.5)*0.08}`);
+      p.setAttribute('radius', '0.032');
+      p.setAttribute('color', color);
+      p.setAttribute('material', 'opacity: 0.7; transparent: true');
+      container.appendChild(p);
+
+      let life = 0;
+      const interval = setInterval(() => {
+        life += 0.05;
+        if (!p.parentNode || life >= 0.7) {
+          clearInterval(interval);
+          if (p.parentNode) p.parentNode.removeChild(p);
+          return;
+        }
+        const cur = p.getAttribute('position');
+        p.setAttribute('position', `${cur.x} ${cur.y + 0.022} ${cur.z}`);
+        p.setAttribute('radius', 0.032 + life * 0.04);
+        p.setAttribute('material', `opacity: ${Math.max(0, 0.7 - life)}; transparent: true`);
+      }, 45);
+    }
+
+    function spawnCashBill(amount) {
+      const spawn = document.getElementById('cash-spawn-point').object3D;
+      const worldPos = new THREE.Vector3();
+      spawn.getWorldPosition(worldPos);
+
+      const container = document.getElementById('dynamic-items');
+      const bill = document.createElement('a-box');
+      bill.setAttribute('position', `${worldPos.x} ${worldPos.y + 0.05} ${worldPos.z}`);
+      bill.setAttribute('width', '0.14');
+      bill.setAttribute('height', '0.01');
+      bill.setAttribute('depth', '0.07');
+      bill.setAttribute('color', '#4caf50');
+      container.appendChild(bill);
+
+      // Animate bill flying happily into the cash register
+      let t = 0;
+      const timer = setInterval(() => {
+        t += 0.08;
+        if (t >= 1) {
+          clearInterval(timer);
+          if (bill.parentNode) bill.parentNode.removeChild(bill);
+          const gm = document.getElementById('vr-scene').components['game-manager'];
+          if (gm) gm.addCash(amount);
+          return;
+        }
+        bill.setAttribute('position', `${worldPos.x + t * 0.32} ${worldPos.y + 0.05 + Math.sin(t * Math.PI) * 0.25} ${worldPos.z - t * 0.1}`);
+        bill.setAttribute('rotation', `0 ${t * 360} 0`);
+      }, 35);
+    }
+
+    /**
+     * =========================================================================
+     * A-FRAME COMPONENTS: GRABBING, CRATES, KNIFE, STOVE, BLENDER, CUSTOMERS
+     * =========================================================================
+     */
+
+    // Decorative passing cars & clouds
+    AFRAME.registerComponent('passing-car', {
+      schema: { speed: { default: 3.5 }, dir: { default: 1 }, color: { default: '#e74c3c' } },
+      tick(time, dt) {
+        const s = dt / 1000;
+        const pos = this.el.object3D.position;
+        pos.x += this.data.speed * this.data.dir * s;
+        if (this.data.dir > 0 && pos.x > 18) pos.x = -18;
+        if (this.data.dir < 0 && pos.x < -18) pos.x = 18;
+      }
+    });
+
+    AFRAME.registerComponent('cloud-floater', {
+      schema: { speed: { default: 0.2 } },
+      tick(time, dt) {
+        const pos = this.el.object3D.position;
+        pos.x += this.data.speed * (dt / 1000);
+        if (pos.x > 16) pos.x = -16;
+      }
+    });
+
+    // Grabbable marker component
+    AFRAME.registerComponent('grabbable', {
+      schema: { type: { default: 'item' }, name: { default: 'Предмет' } },
+      init() {
+        this.isHeld = false;
+        this.holder = null;
+        this.velocity = new THREE.Vector3();
+        this.lastPos = new THREE.Vector3();
+        this.isThrown = false;
+      },
+      tick(time, dt) {
+        const s = Math.min(dt / 1000, 0.05);
+        if (this.isHeld && this.holder) {
+          const targetWorld = new THREE.Vector3();
+          this.holder.object3D.getWorldPosition(targetWorld);
+          this.velocity.subVectors(targetWorld, this.lastPos).divideScalar(Math.max(s, 0.016));
+          this.lastPos.copy(targetWorld);
+          this.el.object3D.position.copy(targetWorld);
+        } else if (this.isThrown) {
+          // Simple projectile flight for throwing Fear Potions at the Robber!
+          this.velocity.y -= 9.8 * s;
+          this.el.object3D.position.addScaledVector(this.velocity, s);
+          if (this.el.object3D.position.y <= 0.96) {
+            this.el.object3D.position.y = 0.96;
+            this.isThrown = false;
+            this.velocity.set(0, 0, 0);
+          }
+        }
+      }
+    });
+
+    // Infinite Ingredient Crate Spawner
+    AFRAME.registerComponent('ingredient-crate', {
+      schema: { itemType: { default: 'bacon' }, label: { default: 'Бекон' } }
+    });
+
+    // Meta Quest 2 / Quest 3 Hand Grabber (Trigger & Grip buttons)
+    AFRAME.registerComponent('vr-hand-grabber', {
+      schema: { hand: { default: 'right' } },
+      init() {
+        this.heldEl = null;
+        const onGrabStart = () => {
+          SFX.unlock();
+          this.tryGrab();
+        };
+        const onGrabEnd = () => {
+          this.releaseGrab();
+        };
+        this.el.addEventListener('triggerdown', onGrabStart);
+        this.el.addEventListener('gripdown', onGrabStart);
+        this.el.addEventListener('triggerup', onGrabEnd);
+        this.el.addEventListener('gripup', onGrabEnd);
+      },
+      tryGrab() {
+        if (this.heldEl) return;
+        const handPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(handPos);
+
+        // 1. Check physical 3D buttons first (Blender button or Service Bell)
+        const blendBtn = document.getElementById('blend-trigger-btn');
+        if (blendBtn) {
+          const bPos = new THREE.Vector3();
+          blendBtn.object3D.getWorldPosition(bPos);
+          if (handPos.distanceTo(bPos) < 0.24) {
+            document.getElementById('blender-unit').components['potion-blender'].blend();
+            return;
+          }
+        }
+        const bellBtn = document.getElementById('service-bell');
+        if (bellBtn) {
+          const bellPos = new THREE.Vector3();
+          bellBtn.object3D.getWorldPosition(bellPos);
+          if (handPos.distanceTo(bellPos) < 0.24) {
+            bellBtn.components['bell-button'].ring();
+            return;
+          }
+        }
+
+        // 2. Check existing grabbable items in scene
+        let closest = null;
+        let minDist = 0.25;
+        document.querySelectorAll('[grabbable]').forEach(el => {
+          const g = el.components.grabbable;
+          if (g && !g.isHeld) {
+            const p = new THREE.Vector3();
+            el.object3D.getWorldPosition(p);
+            const d = handPos.distanceTo(p);
+            if (d < minDist) {
+              minDist = d;
+              closest = el;
+            }
+          }
+        });
+
+        if (closest) {
+          this.attachItem(closest);
+          return;
+        }
+
+        // 3. Check Infinite Ingredient Crates
+        document.querySelectorAll('[ingredient-crate]').forEach(crate => {
+          const cPos = new THREE.Vector3();
+          crate.object3D.getWorldPosition(cPos);
+          if (handPos.distanceTo(cPos) < 0.28) {
+            const type = crate.getAttribute('ingredient-crate').itemType;
+            const spawned = spawnKitchenItem(type, handPos, 'raw');
+            SFX.playPop();
+            this.attachItem(spawned);
+          }
+        });
+      },
+      attachItem(el) {
+        this.heldEl = el;
+        const g = el.components.grabbable;
+        g.isHeld = true;
+        g.isThrown = false;
+        g.holder = this.el;
+        this.el.object3D.getWorldPosition(g.lastPos);
+        SFX.playPop();
+      },
+      releaseGrab() {
+        if (!this.heldEl) return;
+        const el = this.heldEl;
+        const g = el.components.grabbable;
+        g.isHeld = false;
+        g.holder = null;
+
+        // If swung fast (e.g. throwing Fear Potion at Robber), launch it!
+        if (g.velocity.length() > 1.35) {
+          g.isThrown = true;
+          g.velocity.multiplyScalar(1.35);
+        } else {
+          // Snap neatly onto nearby surface height
+          const p = el.object3D.position;
+          if (p.y > 0.85 && p.y < 1.35) {
+            // Check if dropped on elevated shelf
+            if (p.x < -1.95 && p.y > 1.12) p.y = 1.20;
+            else p.y = 0.96;
+          }
+        }
+        this.heldEl = null;
+      }
+    });
+
+    // Kitchen Knife Cutting Mechanics (Chops whole veggies & sausages into slices!)
+    AFRAME.registerComponent('knife-cutter', {
+      init() {
+        this.cooldown = 0;
+      },
+      tick(time, dt) {
+        if (this.cooldown > 0) {
+          this.cooldown -= dt;
+          return;
+        }
+        const knifePos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(knifePos);
+
+        const sliceMap = {
+          cucumber: 'cucumber_slice',
+          watermelon: 'watermelon_slice',
+          pumpkin: 'pumpkin_slice',
+          sausage: 'sausage_slice'
+        };
+
+        document.querySelectorAll('[grabbable]').forEach(target => {
+          if (target === this.el) return;
+          const type = target.dataset.itemType;
+          if (!sliceMap[type]) return;
+          const g = target.components.grabbable;
+          if (g && g.isHeld) return;
+
+          const tPos = new THREE.Vector3();
+          target.object3D.getWorldPosition(tPos);
+          if (knifePos.distanceTo(tPos) < 0.16) {
+            this.cooldown = 420;
+            SFX.playChop();
+            const cookState = target.dataset.cookState || 'raw';
+            const sliceType = sliceMap[type];
+
+            // Spawn 3 physical cut slices!
+            for (let i = -1; i <= 1; i++) {
+              spawnKitchenItem(sliceType, {
+                x: tPos.x + i * 0.055,
+                y: 0.96,
+                z: tPos.z + (Math.random() - 0.5) * 0.04
+              }, cookState);
+            }
+            spawnSmokeParticle(tPos, '#fff59d');
+            if (target.parentNode) target.parentNode.removeChild(target);
+          }
+        });
+      }
+    });
+
+    // Sizzling Stove & Frying Pan Cooker
+    AFRAME.registerComponent('stove-cooker', {
+      init() {
+        this.smokeAccum = 0;
+      },
+      tick(time, dt) {
+        const s = dt / 1000;
+        this.smokeAccum += s;
+        const pan1 = new THREE.Vector3(1.42, 0.98, -0.74);
+        const pan2 = new THREE.Vector3(1.42, 0.98, -0.40);
+
+        let anyCooking = false;
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          const type = item.dataset.itemType;
+          const def = ITEM_DEFS[type];
+          if (!def || !def.cookable) return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+
+          const p = item.object3D.position;
+          const onPan = (p.distanceTo(pan1) < 0.24 || p.distanceTo(pan2) < 0.24) && Math.abs(p.y - 0.96) < 0.12;
+          if (onPan) {
+            anyCooking = true;
+            let prog = parseFloat(item.dataset.cookProgress || '0');
+            prog += s * 0.22; // ~4.5 seconds to cook golden-brown
+            item.dataset.cookProgress = prog.toFixed(3);
+
+            const mesh = item.querySelector('.food-mesh');
+            if (prog >= 1.0 && prog < 2.3 && item.dataset.cookState !== 'cooked') {
+              item.dataset.cookState = 'cooked';
+              if (mesh) mesh.setAttribute('color', def.cookedColor);
+              SFX.playPop();
+            } else if (prog >= 2.3 && item.dataset.cookState !== 'burnt') {
+              item.dataset.cookState = 'burnt';
+              if (mesh) mesh.setAttribute('color', def.burntColor);
+            }
+
+            if (this.smokeAccum > 0.35) {
+              const smokeColor = item.dataset.cookState === 'burnt' ? '#333333' : '#ffffff';
+              spawnSmokeParticle(p, smokeColor);
+            }
+          }
+        });
+
+        if (this.smokeAccum > 0.35) {
+          this.smokeAccum = 0;
+          if (anyCooking) SFX.playSizzle();
+        }
+      }
+    });
+
+    // Blender / Potion Mixer Component
+    AFRAME.registerComponent('potion-blender', {
+      init() {
+        this.ingredients = [];
+      },
+      tick() {
+        const jarPos = new THREE.Vector3(1.42, 1.25, 0.35);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          const type = item.dataset.itemType;
+          if (!type || type === 'knife' || type === 'drink') return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+
+          const p = item.object3D.position;
+          if (p.distanceTo(jarPos) < 0.24 && this.ingredients.length < 4) {
+            this.ingredients.push(type);
+            SFX.playPop();
+            if (item.parentNode) item.parentNode.removeChild(item);
+            this.updateLiquidVisual();
+          }
+        });
+      },
+      updateLiquidVisual() {
+        const liq = document.getElementById('blender-liquid');
+        if (this.ingredients.length === 0) {
+          liq.setAttribute('visible', 'false');
+          return;
+        }
+        const profile = this.evaluateMix(this.ingredients);
+        liq.setAttribute('visible', 'true');
+        liq.setAttribute('color', profile.color);
+        const h = 0.06 + this.ingredients.length * 0.055;
+        liq.setAttribute('height', h);
+        liq.setAttribute('position', `0 ${0.20 + h / 2} 0`);
+      },
+      evaluateMix(list) {
+        const has = (k) => list.some(x => x.includes(k));
+        // 1. Fear Potion (Pumpkin + Boot or Duck) -> Scares away the Robber!
+        if (has('pumpkin') && (has('boot') || has('duck'))) {
+          return { effect: 'fear', label: 'Зелье Страха', shortTag: 'СТРАХ!', color: '#7e22ce' };
+        }
+        // 2. Bacon + Sausage -> Noodle/Bone Arms Mutation!
+        if (has('bacon') && has('sausage')) {
+          return { effect: 'noodle_arms', label: 'Смузи «Руки-Нитки»', shortTag: 'НИТКИ!', color: '#d84315' };
+        }
+        // 3. Watermelon + Pumpkin -> Giant Pumpkin Head Mutation!
+        if (has('watermelon') && has('pumpkin')) {
+          return { effect: 'big_head', label: 'Сок «Тыквоголова»', shortTag: 'ГОЛОВА!', color: '#ff6f00' };
+        }
+        // 4. Cucumber + anything -> Bright Green Giant Mutation!
+        if (has('cucumber')) {
+          return { effect: 'green_giant', label: 'Огуречный Мутаген', shortTag: 'ГИГАНТ!', color: '#2e7d32' };
+        }
+        // 5. Boot or Burnt mystery -> Gross Trash Shake
+        if (has('boot') || has('duck')) {
+          return { effect: 'gross', label: 'Болотная Жижа', shortTag: 'ФУ!', color: '#4e342e' };
+        }
+        // 6. Standard tasty fruit/meat shake
+        return { effect: 'tasty', label: 'Фирменный Напиток', shortTag: 'НАПИТОК', color: '#ec407a' };
+      },
+      blend() {
+        if (this.ingredients.length === 0) {
+          SFX.playTone(150, 'sawtooth', 0.2, 0.15);
+          return;
+        }
+        SFX.playBlender();
+        const profile = this.evaluateMix(this.ingredients);
+        const spawnSpot = document.getElementById('drink-spawn-spot').object3D;
+        const pos = new THREE.Vector3();
+        spawnSpot.getWorldPosition(pos);
+
+        spawnDrinkBottle(profile, { x: pos.x, y: 0.96, z: pos.z });
+        spawnSmokeParticle({ x: 1.42, y: 1.45, z: 0.35 }, profile.color);
+
+        this.ingredients = [];
+        this.updateLiquidVisual();
+      }
+    });
+
+    // Service Bell Button (Summons next guest or resets stuck order)
+    AFRAME.registerComponent('bell-button', {
+      ring() {
+        SFX.playBell();
+        const gm = document.getElementById('vr-scene').components['game-manager'];
+        if (gm) gm.onBellRung();
+      }
+    });
+
+    // Trash Bin Disposal
+    AFRAME.registerComponent('trash-disposal', {
+      tick() {
+        const binPos = new THREE.Vector3(1.15, 0.52, 0.98);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          if (item.dataset.itemType === 'knife') return;
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+          if (item.object3D.position.distanceTo(binPos) < 0.26) {
+            SFX.playPop();
+            if (item.parentNode) item.parentNode.removeChild(item);
+          }
+        });
+      }
+    });
+
+    /**
+     * =========================================================================
+     * GAME MANAGER: DIVERSE CUSTOMERS, MUTATIONS, ROBBER EVENT & ECONOMY
+     * =========================================================================
+     */
+    AFRAME.registerComponent('game-manager', {
+      init() {
+        generateTextures();
+        this.cash = 0;
+        this.ordersCompleted = 0;
+        this.currentCustomer = null;
+        this.currentOrder = null;
+        this.isRobberActive = false;
+        this.robberTimer = 0;
+
+        updateRegisterCanvas(0);
+        this.setupDesktopFallback();
+
+        // Spawn first customer shortly after load
+        setTimeout(() => this.spawnNextGuest(), 900);
+      },
+
+      addCash(amount) {
+        this.cash = Math.max(0, this.cash + amount);
+        SFX.playCash();
+        updateRegisterCanvas(this.cash);
+      },
+
+      onBellRung() {
+        if (!this.currentCustomer) {
+          this.spawnNextGuest();
+        } else if (!this.isRobberActive) {
+          // Dismiss current customer politely and call next
+          this.dismissCustomer(false);
+        }
+      },
+
+      spawnNextGuest() {
+        const anchor = document.getElementById('customer-anchor');
+        anchor.innerHTML = '';
+
+        // Every 3rd visitor is the Masked Robber!
+        const spawnRobber = (this.ordersCompleted > 0 && this.ordersCompleted % 3 === 0 && !this.justHadRobber);
+        this.justHadRobber = spawnRobber;
+
+        if (spawnRobber) {
+          this.spawnRobberCharacter(anchor);
+          return;
+        }
+
+        this.isRobberActive = false;
+        const archetypes = [
+          { name: 'Бизнесмен', skin: '#ffcc99', shirt: '#2c3e50', tie: '#e74c3c', hat: 'briefcase', pitch: 180 },
+          { name: 'Панк-Рокер', skin: '#f5cba7', shirt: '#212121', mohawk: '#e91e63', pitch: 240 },
+          { name: 'Бабуля', skin: '#fadbd8', shirt: '#8e44ad', bun: '#eceff1', pitch: 330 },
+          { name: 'Пришелец', skin: '#80cbc4', shirt: '#ff7043', antenna: true, pitch: 410 },
+          { name: 'Качок', skin: '#e0ac69', shirt: '#e67e22', buff: true, pitch: 140 }
+        ];
+        const arch = archetypes[Math.floor(Math.random() * archetypes.length)];
+
+        // Build Procedural Low-Poly Cartoon Character
+        const guest = document.createElement('a-entity');
+        guest.setAttribute('position', '-2.8 0 0');
+
+        // Torso
+        const torso = document.createElement('a-box');
+        torso.setAttribute('position', '0 1.05 0');
+        torso.setAttribute('width', arch.buff ? '0.62' : '0.44');
+        torso.setAttribute('height', '0.65');
+        torso.setAttribute('depth', '0.28');
+        torso.setAttribute('color', arch.shirt);
+        guest.appendChild(torso);
+
+        // Head Group (can inflate into giant pumpkin!)
+        const headGroup = document.createElement('a-entity');
+        headGroup.setAttribute('position', '0 1.62 0');
+        headGroup.classList.add('cust-head');
+
+        const head = document.createElement('a-box');
+        head.setAttribute('width', '0.36');
+        head.setAttribute('height', '0.36');
+        head.setAttribute('depth', '0.36');
+        head.setAttribute('color', arch.skin);
+        head.classList.add('cust-skin');
+        headGroup.appendChild(head);
+
+        // Googly Cartoon Eyes
+        [-0.08, 0.08].forEach(ex => {
+          const eye = document.createElement('a-sphere');
+          eye.setAttribute('radius', '0.045');
+          eye.setAttribute('position', `${ex} 0.04 0.18`);
+          eye.setAttribute('color', '#ffffff');
+          const pupil = document.createElement('a-sphere');
+          pupil.setAttribute('radius', '0.022');
+          pupil.setAttribute('position', '0 0 0.035');
+          pupil.setAttribute('color', '#111111');
+          eye.appendChild(pupil);
+          headGroup.appendChild(eye);
+        });
+
+        // Expressive Mouth
+        const mouth = document.createElement('a-box');
+        mouth.setAttribute('width', '0.12');
+        mouth.setAttribute('height', '0.035');
+        mouth.setAttribute('depth', '0.03');
+        mouth.setAttribute('position', '0 -0.08 0.18');
+        mouth.setAttribute('color', '#5d1916');
+        headGroup.appendChild(mouth);
+
+        // Archetype Accessories
+        if (arch.mohawk) {
+          const mohawk = document.createElement('a-box');
+          mohawk.setAttribute('width', '0.07');
+          mohawk.setAttribute('height', '0.18');
+          mohawk.setAttribute('depth', '0.34');
+          mohawk.setAttribute('position', '0 0.24 0');
+          mohawk.setAttribute('color', arch.mohawk);
+          headGroup.appendChild(mohawk);
+        }
+        if (arch.bun) {
+          const bun = document.createElement('a-sphere');
+          bun.setAttribute('radius', '0.11');
+          bun.setAttribute('position', '0 0.22 -0.08');
+          bun.setAttribute('color', arch.bun);
+          headGroup.appendChild(bun);
+        }
+        if (arch.antenna) {
+          const ant = document.createElement('a-cylinder');
+          ant.setAttribute('radius', '0.015');
+          ant.setAttribute('height', '0.18');
+          ant.setAttribute('position', '0 0.24 0');
+          ant.setAttribute('color', '#26a69a');
+          const tip = document.createElement('a-sphere');
+          tip.setAttribute('radius', '0.035');
+          tip.setAttribute('position', '0 0.34 0');
+          tip.setAttribute('color', '#ffee58');
+          headGroup.appendChild(ant);
+          headGroup.appendChild(tip);
+        }
+        if (arch.tie) {
+          const tie = document.createElement('a-box');
+          tie.setAttribute('width', '0.07');
+          tie.setAttribute('height', '0.32');
+          tie.setAttribute('depth', '0.03');
+          tie.setAttribute('position', '0 1.12 0.15');
+          tie.setAttribute('color', arch.tie);
+          guest.appendChild(tie);
+        }
+
+        guest.appendChild(headGroup);
+
+        // Left & Right Arms (Can mutate into ultra-thin thread/bone arms!)
+        const armWidth = arch.buff ? 0.14 : 0.10;
+        const leftArm = document.createElement('a-entity');
+        leftArm.setAttribute('position', `${arch.buff ? -0.39 : -0.29} 1.28 0`);
+        leftArm.classList.add('cust-arm-left');
+        const lMesh = document.createElement('a-box');
+        lMesh.setAttribute('position', '0 -0.22 0');
+        lMesh.setAttribute('width', armWidth);
+        lMesh.setAttribute('height', '0.52');
+        lMesh.setAttribute('depth', armWidth);
+        lMesh.setAttribute('color', arch.skin);
+        lMesh.classList.add('cust-skin', 'arm-mesh');
+        leftArm.appendChild(lMesh);
+
+        const rightArm = document.createElement('a-entity');
+        rightArm.setAttribute('position', `${arch.buff ? 0.39 : 0.29} 1.28 0`);
+        rightArm.classList.add('cust-arm-right');
+        const rMesh = document.createElement('a-box');
+        rMesh.setAttribute('position', '0 -0.22 0');
+        rMesh.setAttribute('width', armWidth);
+        rMesh.setAttribute('height', '0.52');
+        rMesh.setAttribute('depth', armWidth);
+        rMesh.setAttribute('color', arch.skin);
+        rMesh.classList.add('cust-skin', 'arm-mesh');
+        rightArm.appendChild(rMesh);
+
+        guest.appendChild(leftArm);
+        guest.appendChild(rightArm);
+        anchor.appendChild(guest);
+
+        this.currentCustomer = guest;
+        this.generateOrderForGuest(arch);
+
+        // Walk up to counter
+        let walkX = -2.6;
+        const walkInterval = setInterval(() => {
+          walkX += 0.12;
+          if (walkX >= 0) {
+            walkX = 0;
+            clearInterval(walkInterval);
+            SFX.playMumble(arch.pitch);
+          }
+          guest.setAttribute('position', `${walkX} ${Math.abs(Math.sin(walkX * 6)) * 0.04} 0`);
+        }, 30);
+      },
+
+      generateOrderForGuest(arch) {
+        const foods = [
+          { type: 'bacon', needCooked: true, text: 'Жареный Бекон' },
+          { type: 'sausage', needCooked: true, text: 'Жареная Сосиска' },
+          { type: 'cucumber_slice', needCooked: false, text: 'Нарезанный Огурец' },
+          { type: 'watermelon_slice', needCooked: false, text: 'Долька Арбуза' },
+          { type: 'pumpkin_slice', needCooked: false, text: 'Кусок Тыквы' }
+        ];
+        const drinks = [
+          { wantAny: true, text: 'Любой Смузи из Блендера' },
+          { wantEffect: 'noodle_arms', text: 'Смузи: Бекон + Сосиска' },
+          { wantEffect: 'big_head', text: 'Сок: Арбуз + Тыква' },
+          { wantEffect: 'green_giant', text: 'Напиток с Огурцом' }
+        ];
+
+        const f = foods[Math.floor(Math.random() * foods.length)];
+        const d = drinks[Math.floor(Math.random() * drinks.length)];
+
+        this.currentOrder = {
+          foodType: f.type,
+          needCooked: f.needCooked,
+          drinkRule: d,
+          foodGot: false,
+          drinkGot: false
+        };
+
+        updateOrderBoardCanvas(
+          `ГОСТЬ: ${arch.name.toUpperCase()}`,
+          `ЕДА: ${f.text}`,
+          `НАПИТОК: ${d.text}`,
+          false
+        );
+      },
+
+      spawnRobberCharacter(anchor) {
+        this.isRobberActive = true;
+        this.robberTimer = 0;
+
+        const robber = document.createElement('a-entity');
+        robber.setAttribute('position', '2.6 0 0');
+
+        // Striped Bandit Shirt
+        const torso = document.createElement('a-box');
+        torso.setAttribute('position', '0 1.05 0');
+        torso.setAttribute('width', '0.46');
+        torso.setAttribute('height', '0.65');
+        torso.setAttribute('depth', '0.28');
+        torso.setAttribute('color', '#212121');
+        robber.appendChild(torso);
+
+        const stripe = document.createElement('a-box');
+        stripe.setAttribute('position', '0 1.08 0');
+        stripe.setAttribute('width', '0.47');
+        stripe.setAttribute('height', '0.14');
+        stripe.setAttribute('depth', '0.29');
+        stripe.setAttribute('color', '#ffffff');
+        robber.appendChild(stripe);
+
+        // Head with Bandit Eye Mask & Beanie
+        const headGroup = document.createElement('a-entity');
+        headGroup.setAttribute('position', '0 1.62 0');
+        const head = document.createElement('a-box');
+        head.setAttribute('width', '0.36');
+        head.setAttribute('height', '0.36');
+        head.setAttribute('depth', '0.36');
+        head.setAttribute('color', '#f5cba7');
+        head.classList.add('robber-face');
+        headGroup.appendChild(head);
+
+        const mask = document.createElement('a-box');
+        mask.setAttribute('width', '0.38');
+        mask.setAttribute('height', '0.11');
+        mask.setAttribute('depth', '0.38');
+        mask.setAttribute('position', '0 0.04 0.01');
+        mask.setAttribute('color', '#111111');
+        headGroup.appendChild(mask);
+
+        const beanie = document.createElement('a-sphere');
+        beanie.setAttribute('radius', '0.21');
+        beanie.setAttribute('position', '0 0.16 0');
+        beanie.setAttribute('color', '#111111');
+        headGroup.appendChild(beanie);
+        robber.appendChild(headGroup);
+
+        // Arms raised menacingly
+        const lArm = document.createElement('a-box');
+        lArm.setAttribute('position', '-0.31 1.25 0.15');
+        lArm.setAttribute('rotation', '-65 0 0');
+        lArm.setAttribute('width', '0.10');
+        lArm.setAttribute('height', '0.50');
+        lArm.setAttribute('depth', '0.10');
+        lArm.setAttribute('color', '#212121');
+        lArm.classList.add('robber-arm');
+
+        const rArm = document.createElement('a-box');
+        rArm.setAttribute('position', '0.31 1.25 0.15');
+        rArm.setAttribute('rotation', '-65 0 0');
+        rArm.setAttribute('width', '0.10');
+        rArm.setAttribute('height', '0.50');
+        rArm.setAttribute('depth', '0.10');
+        rArm.setAttribute('color', '#212121');
+        rArm.classList.add('robber-arm');
+
+        robber.appendChild(lArm);
+        robber.appendChild(rArm);
+        anchor.appendChild(robber);
+        this.currentCustomer = robber;
+
+        updateOrderBoardCanvas(
+          'ТРЕВОГА! ОГРАБЛЕНИЕ!',
+          'БРОСЬ В НЕГО ЗЕЛЬЕ СТРАХА!',
+          '(Тыква + Ботинок в блендер)',
+          true
+        );
+
+        let rx = 2.6;
+        const sneak = setInterval(() => {
+          rx -= 0.14;
+          if (rx <= 0.15) {
+            rx = 0.15;
+            clearInterval(sneak);
+            SFX.playTone(130, 'sawtooth', 0.35, 0.25, 90);
+          }
+          robber.setAttribute('position', `${rx} ${Math.abs(Math.sin(rx * 7)) * 0.04} 0`);
+        }, 30);
+      },
+
+      tick(time, dt) {
+        if (!this.currentCustomer) return;
+
+        // 1. Check if Fear Potion hits or lands near the Robber!
+        if (this.isRobberActive) {
+          this.robberTimer += dt / 1000;
+          if (this.robberTimer > 14) {
+            // Robber steals $15 every 14 seconds if not scared away
+            this.robberTimer = 0;
+            this.addCash(-15);
+          }
+
+          const robberPos = new THREE.Vector3();
+          this.currentCustomer.object3D.getWorldPosition(robberPos);
+
+          document.querySelectorAll('[grabbable]').forEach(item => {
+            if (item.dataset.itemType !== 'drink') return;
+            const p = new THREE.Vector3();
+            item.object3D.getWorldPosition(p);
+            if (p.distanceTo(robberPos) < 1.15) {
+              // Hit or splashed near robber!
+              if (item.dataset.potionEffect === 'fear') {
+                if (item.parentNode) item.parentNode.removeChild(item);
+                this.scareRobberAway();
+              }
+            }
+          });
+          return;
+        }
+
+        // 2. Check Serving Plate Zone for Normal Customers
+        const servePos = new THREE.Vector3(-0.35, 0.96, -1.25);
+        document.querySelectorAll('[grabbable]').forEach(item => {
+          const g = item.components.grabbable;
+          if (g && g.isHeld) return;
+          const p = item.object3D.position;
+          if (p.distanceTo(servePos) < 0.34) {
+            this.evaluateServedItem(item);
+          }
+        });
+      },
+
+      evaluateServedItem(item) {
+        if (!this.currentCustomer || !this.currentOrder) return;
+        const type = item.dataset.itemType;
+        if (type === 'knife') return;
+
+        const cookState = item.dataset.cookState || 'raw';
+        const effect = item.dataset.potionEffect || 'none';
+
+        // Remove item as customer consumes it
+        if (item.parentNode) item.parentNode.removeChild(item);
+        spawnSmokeParticle({ x: -0.35, y: 1.05, z: -1.25 }, '#fff59d');
+
+        // Handle Burnt Food or Boot prank
+        if (cookState === 'burnt' || type === 'boot') {
+          SFX.playMutation();
+          spawnSmokeParticle({ x: -0.35, y: 1.6, z: -2.1 }, '#333333');
+          updateOrderBoardCanvas('ФУ! ГОРЕЛОЕ / БОТИНОК!', 'Покупатель убежал в гневе!', 'Попробуй ещё раз!', true);
+          this.dismissCustomer(false);
+          return;
+        }
+
+        // Handle Drink & Hilarious Mutation Effects!
+        if (type === 'drink') {
+          this.currentOrder.drinkGot = true;
+          this.applyCustomerMutation(effect);
+        } else {
+          // Food item served
+          if (type === this.currentOrder.foodType && (!this.currentOrder.needCooked || cookState === 'cooked')) {
+            this.currentOrder.foodGot = true;
+            SFX.playPop();
+          } else {
+            // Accepted with partial tip
+            this.currentOrder.foodGot = true;
+            SFX.playTone(260, 'triangle', 0.15, 0.15);
+          }
+        }
+
+        // If both food & drink served (or mutation triggered), pay cash and move to next guest!
+        if (this.currentOrder.foodGot && this.currentOrder.drinkGot) {
+          this.ordersCompleted++;
+          spawnCashBill(25);
+          updateOrderBoardCanvas('ЗАКАЗ ВЫПОЛНЕН! +$25', 'Спасибо за вкуснятину!', 'Следующий гость идёт...', false);
+          setTimeout(() => this.dismissCustomer(true), 2100);
+        } else {
+          updateOrderBoardCanvas(
+            'ОТЛИЧНО! ЧТО ЕЩЁ?',
+            this.currentOrder.foodGot ? 'Еда: ГОТОВО ✔' : 'Жду Еду!',
+            this.currentOrder.drinkGot ? 'Напиток: ГОТОВО ✔' : 'Жду Напиток из Блендера!',
+            false
+          );
+        }
+      },
+
+      applyCustomerMutation(effect) {
+        const guest = this.currentCustomer;
+        if (!guest) return;
+
+        if (effect === 'noodle_arms') {
+          // Arms shrink into ultra-thin thread/bone sticks ("тонкие с нитку / кости")!
+          SFX.playMutation();
+          guest.querySelectorAll('.arm-mesh').forEach(arm => {
+            arm.setAttribute('width', '0.016');
+            arm.setAttribute('depth', '0.016');
+            arm.setAttribute('height', '0.68');
+            arm.setAttribute('color', '#f5f5dc'); // Bone-white stick arms
+          });
+          const lArm = guest.querySelector('.cust-arm-left');
+          const rArm = guest.querySelector('.cust-arm-right');
+          if (lArm) lArm.setAttribute('rotation', '0 0 -135');
+          if (rArm) rArm.setAttribute('rotation', '0 0 135');
+        } else if (effect === 'big_head') {
+          // Giant Pumpkin Head inflation!
+          SFX.playMutation();
+          const headGrp = guest.querySelector('.cust-head');
+          if (headGrp) headGrp.setAttribute('scale', '2.15 2.15 2.15');
+          guest.querySelectorAll('.cust-skin').forEach(s => s.setAttribute('color', '#f57c00'));
+        } else if (effect === 'green_giant') {
+          // Turns bright green and stretches tall!
+          SFX.playMutation();
+          guest.setAttribute('scale', '1.15 1.32 1.15');
+          guest.querySelectorAll('.cust-skin').forEach(s => s.setAttribute('color', '#43a047'));
+        } else {
+          SFX.playPop();
+        }
+      },
+
+      scareRobberAway() {
+        if (!this.isRobberActive || !this.currentCustomer) return;
+        this.isRobberActive = false;
+        SFX.playRobberScream();
+
+        const robber = this.currentCustomer;
+        // Turn pale in terror, turn arms into trembling noodles, and sprint away!
+        const face = robber.querySelector('.robber-face');
+        if (face) face.setAttribute('color', '#e0f7fa');
+        robber.querySelectorAll('.robber-arm').forEach(arm => {
+          arm.setAttribute('width', '0.025');
+          arm.setAttribute('depth', '0.025');
+          arm.setAttribute('rotation', '-155 0 0');
+        });
+
+        spawnSmokeParticle({ x: -0.35, y: 1.5, z: -2.1 }, '#ce93d8');
+        spawnCashBill(40); // Hero reward!
+        updateOrderBoardCanvas('ГРАБИТЕЛЬ УБЕЖАЛ В УЖАСЕ!', 'НАГРАДА ЗА СМЕЛОСТЬ: +$40', 'Отличная работа, шеф!', false);
+
+        let rx = 0.15;
+        const flee = setInterval(() => {
+          rx -= 0.28;
+          robber.setAttribute('position', `${rx} ${Math.abs(Math.sin(rx * 12)) * 0.08} 0`);
+          if (rx <= -3.5) {
+            clearInterval(flee);
+            this.currentCustomer = null;
+            setTimeout(() => this.spawnNextGuest(), 1000);
+          }
+        }, 25);
+      },
+
+      dismissCustomer(happy) {
+        const guest = this.currentCustomer;
+        this.currentCustomer = null;
+        if (!guest) {
+          this.spawnNextGuest();
+          return;
+        }
+        let gx = 0;
+        const leave = setInterval(() => {
+          gx += happy ? 0.16 : -0.20;
+          guest.setAttribute('position', `${gx} 0 0`);
+          if (Math.abs(gx) >= 3.2) {
+            clearInterval(leave);
+            if (guest.parentNode) guest.parentNode.removeChild(guest);
+            setTimeout(() => this.spawnNextGuest(), 600);
+          }
+        }, 28);
+      },
+
+      // Desktop Mouse/Keyboard Fallback so PC testing works seamlessly without a headset
+      setupDesktopFallback() {
+        let desktopHeld = null;
+        const anchor = document.getElementById('desktop-hand-anchor');
+
+        window.addEventListener('mousedown', (e) => {
+          if (this.el.is('vr-mode')) return;
+          SFX.unlock();
+
+          const cam = document.getElementById('player-head').object3D;
+          const rayOrigin = new THREE.Vector3();
+          const rayDir = new THREE.Vector3(0, 0, -1);
+          cam.getWorldPosition(rayOrigin);
+          rayDir.applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion())).normalize();
+
+          // If holding something, drop it where looking
+          if (desktopHeld) {
+            const g = desktopHeld.components.grabbable;
+            g.isHeld = false;
+            g.holder = null;
+            const dropPos = rayOrigin.clone().addScaledVector(rayDir, 0.85);
+            dropPos.y = Math.max(0.96, Math.min(1.30, dropPos.y));
+            desktopHeld.object3D.position.copy(dropPos);
+            desktopHeld = null;
+            return;
+          }
+
+          // Check 3D Buttons
+          const checkBtn = (btnId, cb) => {
+            const b = document.getElementById(btnId);
+            if (!b) return false;
+            const p = new THREE.Vector3();
+            b.object3D.getWorldPosition(p);
+            const toP = p.clone().sub(rayOrigin);
+            const proj = toP.dot(rayDir);
+            if (proj > 0 && proj < 2.2 && toP.cross(rayDir).length() < 0.22) {
+              cb();
+              return true;
+            }
+            return false;
+          };
+
+          if (checkBtn('blend-trigger-btn', () => document.getElementById('blender-unit').components['potion-blender'].blend())) return;
+          if (checkBtn('service-bell', () => document.getElementById('service-bell').components['bell-button'].ring())) return;
+
+          // Check existing items along gaze ray
+          let best = null;
+          let bestDist = 2.0;
+          document.querySelectorAll('[grabbable]').forEach(el => {
+            const p = new THREE.Vector3();
+            el.object3D.getWorldPosition(p);
+            const toP = p.clone().sub(rayOrigin);
+            const proj = toP.dot(rayDir);
+            if (proj > 0.1 && proj < bestDist && toP.cross(rayDir).length() < 0.18) {
+              bestDist = proj;
+              best = el;
+            }
+          });
+
+          if (best) {
+            desktopHeld = best;
+            const g = best.components.grabbable;
+            g.isHeld = true;
+            g.holder = anchor;
+            SFX.playPop();
+            return;
+          }
+
+          // Check Crates along gaze ray
+          document.querySelectorAll('[ingredient-crate]').forEach(crate => {
+            const p = new THREE.Vector3();
+            crate.object3D.getWorldPosition(p);
+            const toP = p.clone().sub(rayOrigin);
+            const proj = toP.dot(rayDir);
+            if (proj > 0.1 && proj < 2.2 && toP.cross(rayDir).length() < 0.24 && !desktopHeld) {
+              const type = crate.getAttribute('ingredient-crate').itemType;
+              const spawned = spawnKitchenItem(type, p, 'raw');
+              desktopHeld = spawned;
+              const g = spawned.components.grabbable;
+              g.isHeld = true;
+              g.holder = anchor;
+              SFX.playPop();
+            }
+          });
+        });
+
+        // 'E' key: Throw held item (for Robber) or swing knife down
+        window.addEventListener('keydown', (e) => {
+          if (this.el.is('vr-mode')) return;
+          if (e.code === 'KeyE' && desktopHeld) {
+            const cam = document.getElementById('player-head').object3D;
+            const dir = new THREE.Vector3(0, 0.25, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion())).normalize();
+            const g = desktopHeld.components.grabbable;
+            g.isHeld = false;
+            g.holder = null;
+            g.isThrown = true;
+            g.velocity.copy(dir).multiplyScalar(6.5);
+            desktopHeld = null;
+          }
+        });
+
+        // Hide desktop hint when entering VR on Quest 2/3
+        this.el.addEventListener('enter-vr', () => {
+          SFX.unlock();
+          const hint = document.getElementById('desktop-hint');
+          const ret = document.getElementById('desktop-reticle');
+          if (hint) hint.style.display = 'none';
+          if (ret) ret.setAttribute('visible', 'false');
+        });
+        this.el.addEventListener('exit-vr', () => {
+          const hint = document.getElementById('desktop-hint');
+          const ret = document.getElementById('desktop-reticle');
+          if (hint) hint.style.display = 'block';
+          if (ret) ret.setAttribute('visible', 'true');
+        });
+      }
+    });
+  </script>
+</body>
+</html>
+```
